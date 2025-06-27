@@ -13,7 +13,6 @@ import UserDashboard from './components/UserDashboard';
 import TournamentSetupModal from './components/TournamentSetupModal';
 import TournamentResume from './components/TournamentResume';
 import PublicTournamentView from './components/PublicTournamentView';
-import LandingPage from './components/LandingPage';
 import TournamentControlCenter from './components/TournamentControlCenter';
 import DirectorsLeaderboard from './components/DirectorsLeaderboard';
 import { supabase } from './lib/supabase';
@@ -150,11 +149,11 @@ function HomePage() {
       }, 3000);
       
       // Redirect to landing page
-      navigate('/');
+      navigate('/auth/signin', { replace: true });
     } catch (err) {
       console.error('Error signing out:', err);
       // Still redirect even if there's an error
-      navigate('/');
+      navigate('/auth/signin', { replace: true });
     }
   };
 
@@ -843,9 +842,14 @@ function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<LandingPage />} />
+        {/* Redirect root to auth/signin */}
+        <Route path="/" element={<Navigate to="/auth/signin" replace />} />
+        
+        {/* Auth routes */}
         <Route path="/auth" element={<Navigate to="/auth/signin" replace />} />
         <Route path="/auth/:mode" element={<AuthRoute />} />
+        
+        {/* Dashboard and admin routes */}
         <Route path="/dashboard" element={<DashboardRoute />} />
         <Route path="/admin" element={<DashboardRoute />} />
         <Route path="/profile" element={<DashboardRoute />} />
@@ -853,6 +857,8 @@ function App() {
         <Route path="/tournaments" element={<DashboardRoute />} />
         <Route path="/history" element={<DashboardRoute />} />
         <Route path="/tournament/:tournamentId/dashboard" element={<TournamentControlCenterRoute />} />
+        
+        {/* Public tournament routes */}
         <Route path="/t/:tournamentId" element={<PublicTournamentRoute />} />
         <Route path="/tournaments/:slug" element={<PublicTournamentRoute />} />
         <Route path="/t/:tournamentId/statistics" element={<StatisticsRoute />} />
