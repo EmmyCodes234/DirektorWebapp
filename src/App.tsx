@@ -36,6 +36,15 @@ interface ProtectedRouteProps {
 }
 
 function ProtectedRoute({ children, user, loading }: ProtectedRouteProps) {
+  const navigate = useNavigate();
+  
+  useEffect(() => {
+    if (!loading && !user) {
+      console.log("Protected route: No user found, redirecting to auth");
+      navigate('/auth/signin', { replace: true });
+    }
+  }, [user, loading, navigate]);
+  
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center">
@@ -45,7 +54,7 @@ function ProtectedRoute({ children, user, loading }: ProtectedRouteProps) {
   }
 
   if (!user) {
-    return <Navigate to="/auth/signin" replace />;
+    return null; // Will redirect in useEffect
   }
 
   return <>{children}</>;
@@ -70,6 +79,7 @@ function HomePage() {
   useEffect(() => {
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log("HomePage: Initial session check:", session ? "Session exists" : "No session");
       setUser(session?.user ?? null);
       if (session?.user) {
         checkExistingTournaments(session.user.id);
@@ -81,6 +91,7 @@ function HomePage() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log("HomePage: Auth state changed:", _event, session ? "Session exists" : "No session");
       setUser(session?.user ?? null);
       if (session?.user) {
         checkExistingTournaments(session.user.id);
@@ -359,6 +370,7 @@ function HomePage() {
 
   const handleAuthSuccess = () => {
     // User is now authenticated, they will be redirected to dashboard automatically
+    console.log("Auth success, navigating to dashboard");
     navigate('/dashboard');
   };
 
@@ -696,10 +708,15 @@ function AuthRoute() {
   useEffect(() => {
     // Check if user is already logged in
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log("AuthRoute: Initial session check:", session ? "Session exists" : "No session");
       if (session?.user) {
         setUser(session.user);
-        navigate('/dashboard');
+        console.log("AuthRoute: User found, redirecting to dashboard");
+        navigate('/dashboard', { replace: true });
       }
+      setLoading(false);
+    }).catch(err => {
+      console.error("Error checking session:", err);
       setLoading(false);
     });
 
@@ -707,9 +724,11 @@ function AuthRoute() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log("AuthRoute: Auth state changed:", _event, session ? "Session exists" : "No session");
       if (session?.user) {
         setUser(session.user);
-        navigate('/dashboard');
+        console.log("AuthRoute: User authenticated, redirecting to dashboard");
+        navigate('/dashboard', { replace: true });
       } else {
         setUser(null);
       }
@@ -726,7 +745,12 @@ function AuthRoute() {
     );
   }
 
-  return <AuthForm onAuthSuccess={() => navigate('/dashboard')} initialMode={mode === 'signup' ? 'signup' : 'signin'} />;
+  const handleAuthSuccess = () => {
+    console.log("AuthRoute: Auth success callback triggered");
+    navigate('/dashboard', { replace: true });
+  };
+
+  return <AuthForm onAuthSuccess={handleAuthSuccess} initialMode={mode === 'signup' ? 'signup' : 'signin'} />;
 }
 
 // Dashboard Route Component
@@ -736,18 +760,27 @@ function DashboardRoute() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    console.log("DashboardRoute: Checking session");
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log("DashboardRoute: Session check result:", session ? "Session exists" : "No session");
       setUser(session?.user ?? null);
       setLoading(false);
       if (!session?.user) {
-        navigate('/');
+        console.log("DashboardRoute: No user found, redirecting to auth");
+        navigate('/auth/signin', { replace: true });
       }
+    }).catch(err => {
+      console.error("Error checking session:", err);
+      setLoading(false);
+      navigate('/auth/signin', { replace: true });
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log("DashboardRoute: Auth state changed:", _event, session ? "Session exists" : "No session");
       setUser(session?.user ?? null);
       if (!session?.user) {
-        navigate('/');
+        console.log("DashboardRoute: User signed out, redirecting to auth");
+        navigate('/auth/signin', { replace: true });
       }
     });
 
@@ -769,17 +802,25 @@ function TournamentControlCenterRoute() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log("TournamentControlCenterRoute: Session check result:", session ? "Session exists" : "No session");
       setUser(session?.user ?? null);
       setLoading(false);
       if (!session?.user) {
-        navigate('/auth/signin');
+        console.log("TournamentControlCenterRoute: No user found, redirecting to auth");
+        navigate('/auth/signin', { replace: true });
       }
+    }).catch(err => {
+      console.error("Error checking session:", err);
+      setLoading(false);
+      navigate('/auth/signin', { replace: true });
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log("TournamentControlCenterRoute: Auth state changed:", _event, session ? "Session exists" : "No session");
       setUser(session?.user ?? null);
       if (!session?.user) {
-        navigate('/auth/signin');
+        console.log("TournamentControlCenterRoute: User signed out, redirecting to auth");
+        navigate('/auth/signin', { replace: true });
       }
     });
 

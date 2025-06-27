@@ -63,7 +63,7 @@ export default function AuthForm({ onAuthSuccess, initialMode = 'signin' }: Auth
         setPassword('');
         navigate('/auth/signin', { replace: true });
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
@@ -77,10 +77,19 @@ export default function AuthForm({ onAuthSuccess, initialMode = 'signin' }: Auth
           }
         });
         
-        // Success! Navigate to dashboard
-        onAuthSuccess();
+        // Make sure we have a session before redirecting
+        if (data.session) {
+          console.log("Login successful, redirecting to dashboard");
+          // Add a small delay to ensure auth state is updated
+          setTimeout(() => {
+            onAuthSuccess();
+          }, 100);
+        } else {
+          throw new Error('Failed to establish session');
+        }
       }
     } catch (error: any) {
+      console.error("Auth error:", error.message);
       setError(error.message);
       
       // Log auth error
