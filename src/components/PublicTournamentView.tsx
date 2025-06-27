@@ -382,7 +382,7 @@ const PublicTournamentView: React.FC = () => {
   };
 
   const handleBackToHome = () => {
-    navigate('/');
+    navigate('/auth/signin');
   };
 
   const handleViewStatistics = () => {
@@ -530,7 +530,7 @@ const PublicTournamentView: React.FC = () => {
             className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-jetbrains transition-all duration-200 mx-auto"
           >
             <ArrowLeft size={16} />
-            ← Back to Home
+            ← Back to Sign In
           </button>
         </div>
       </div>
@@ -613,7 +613,7 @@ const PublicTournamentView: React.FC = () => {
                 onClick={handleBackToHome}
                 className="text-gray-400 hover:text-white font-jetbrains text-sm transition-colors duration-200"
               >
-                ← Back to Home
+                ← Back to Sign In
               </button>
             </div>
           </div>
@@ -645,7 +645,7 @@ const PublicTournamentView: React.FC = () => {
               className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors duration-200"
             >
               <ArrowLeft size={20} />
-              <span className="font-jetbrains">← Back to Home</span>
+              <span className="font-jetbrains">← Back to Sign In</span>
             </button>
             
             <button

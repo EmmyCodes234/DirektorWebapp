@@ -104,7 +104,7 @@ const DirectorsLeaderboard: React.FC = () => {
   };
 
   const handleBackToHome = () => {
-    navigate('/');
+    navigate('/auth/signin');
   };
 
   const handleDirectorClick = (directorId: string) => {
@@ -150,7 +150,7 @@ const DirectorsLeaderboard: React.FC = () => {
               className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors duration-200"
             >
               <ArrowLeft size={20} />
-              <span className="font-jetbrains">← Back to Home</span>
+              <span className="font-jetbrains">← Back to Sign In</span>
             </button>
           </div>
 

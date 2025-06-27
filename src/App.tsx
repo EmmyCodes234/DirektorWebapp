@@ -820,6 +820,9 @@ function App() {
         <Route path="/statistics" element={<StatisticsRoute />} />
         <Route path="/projector/:tournamentId/:divisionId" element={<ProjectionModeRoute />} />
         <Route path="/leaderboard/directors" element={<DirectorsLeaderboardRoute />} />
+        
+        {/* Fallback route - redirect to auth/signin */}
+        <Route path="*" element={<Navigate to="/auth/signin" replace />} />
       </Routes>
     </Router>
   );
