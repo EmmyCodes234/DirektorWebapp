@@ -20,11 +20,6 @@ const BadgeAwardModal: React.FC<BadgeAwardModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      // Play sound effect if available
-      const audio = new Audio('/assets/sounds/badge-unlock.mp3');
-      audio.volume = 0.5;
-      audio.play().catch(err => console.log('Audio playback prevented:', err));
-      
       // Start animation
       setIsAnimating(true);
       
@@ -70,6 +65,7 @@ const BadgeAwardModal: React.FC<BadgeAwardModalProps> = ({
           <button
             onClick={onClose}
             className="w-10 h-10 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-all duration-200"
+            aria-label="Close modal"
           >
             <X size={24} />
           </button>
@@ -112,8 +108,10 @@ const BadgeAwardModal: React.FC<BadgeAwardModalProps> = ({
                 left: `${Math.random() * 100}%`,
                 top: `${Math.random() * 100}%`,
                 animationDelay: `${Math.random() * 0.5}s`,
-                animationDuration: `${1 + Math.random() * 2}s`
-              }}
+                animationDuration: `${1 + Math.random() * 2}s`,
+                '--tx': `${(Math.random() - 0.5) * 200}px`,
+                '--ty': `${(Math.random() - 0.5) * 200}px`
+              } as React.CSSProperties}
             />
           ))}
         </div>

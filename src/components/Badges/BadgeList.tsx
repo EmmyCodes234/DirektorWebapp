@@ -26,7 +26,7 @@ const BadgeList: React.FC<BadgeListProps> = ({
   }
 
   return (
-    <div className={`flex flex-wrap gap-3 ${className}`}>
+    <div className={`flex flex-wrap gap-4 ${className}`}>
       {badges.map((badge) => (
         <BadgeIcon 
           key={badge.id} 

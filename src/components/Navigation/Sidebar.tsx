@@ -11,8 +11,7 @@ import {
   ChevronRight,
   LogOut,
   Users,
-  BarChart3,
-  FileText
+  BarChart3
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { get, set } from 'idb-keyval';
@@ -235,11 +234,6 @@ const Sidebar: React.FC<SidebarProps> = ({ onSignOut }) => {
               }}
               title={collapsed ? item.label : undefined}
             >
-              {/* Ripple effect container */}
-              <span className="absolute inset-0 pointer-events-none overflow-hidden rounded-lg">
-                <span className="absolute inset-0 bg-white/10 transform scale-0 opacity-0 transition-all duration-300 rounded-full peer-active:scale-100 peer-active:opacity-100"></span>
-              </span>
-              
               {isLoading[item.path] ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (

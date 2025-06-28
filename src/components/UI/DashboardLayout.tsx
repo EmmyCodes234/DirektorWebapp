@@ -93,7 +93,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       <OnboardingWizard />
       
       {/* Floating Action Button */}
-      {showFAB && (
+      {showFAB && actions.length > 0 && (
         <FloatingActionButton actions={actions} />
       )}
     </div>

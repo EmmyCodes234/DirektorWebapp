@@ -50,6 +50,7 @@ const PrintableView: React.FC<PrintableViewProps> = ({
           <button
             onClick={handlePrint}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-jetbrains transition-all duration-200"
+            aria-label="Print document"
           >
             <Printer size={16} />
             Print
@@ -57,6 +58,7 @@ const PrintableView: React.FC<PrintableViewProps> = ({
           <button
             onClick={onClose}
             className="p-2 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white rounded-lg transition-all duration-200"
+            aria-label="Close print view"
           >
             <X size={20} />
           </button>

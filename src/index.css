@@ -158,6 +158,16 @@
   .animate-particle {
     animation: particle 1s ease-out forwards;
   }
+  
+  /* Active scale for buttons */
+  .active\:scale-98:active {
+    transform: scale(0.98);
+  }
+  
+  /* Border left utility */
+  .border-l-3 {
+    border-left-width: 3px;
+  }
 }
 
 @keyframes float {
@@ -221,5 +231,24 @@
   .particle {
     width: 1.5px;
     height: 1.5px;
+  }
+}
+
+/* Print styles */
+@media print {
+  .print\:hidden {
+    display: none !important;
+  }
+  
+  .print\:block {
+    display: block !important;
+  }
+  
+  .print\:text-black {
+    color: #000 !important;
+  }
+  
+  .print\:p-0 {
+    padding: 0 !important;
   }
 }

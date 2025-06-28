@@ -159,7 +159,7 @@ const OnboardingWizard: React.FC = () => {
       
       {/* Tooltip */}
       <div 
-        className="absolute w-300 bg-gray-900/95 backdrop-blur-lg border border-blue-500/50 rounded-lg p-4 shadow-xl pointer-events-auto"
+        className="absolute w-300 max-w-xs bg-gray-900/95 backdrop-blur-lg border border-blue-500/50 rounded-lg p-4 shadow-xl pointer-events-auto"
         style={tooltipStyle}
       >
         <div className="flex justify-between items-start mb-2">
@@ -169,6 +169,7 @@ const OnboardingWizard: React.FC = () => {
           <button 
             onClick={skipOnboarding}
             className="text-gray-400 hover:text-white transition-colors duration-200"
+            aria-label="Skip onboarding"
           >
             <X size={18} />
           </button>

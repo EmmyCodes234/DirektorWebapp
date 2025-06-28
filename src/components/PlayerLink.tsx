@@ -14,6 +14,10 @@ const PlayerLink: React.FC<PlayerLinkProps> = ({
   className = '',
   children
 }) => {
+  if (!playerId || playerId === 'bye') {
+    return <span className={className}>{children || playerName}</span>;
+  }
+  
   return (
     <Link
       to={`/players/${playerId}`}

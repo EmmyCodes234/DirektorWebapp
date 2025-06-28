@@ -82,6 +82,7 @@ const DraftResumeCard: React.FC<DraftResumeCardProps> = ({
                 : 'bg-gray-700 hover:bg-red-600/30 text-gray-300 hover:text-red-300'
             }`}
             title={isDeleteConfirm ? 'Click again to confirm' : 'Delete draft'}
+            aria-label={isDeleteConfirm ? 'Confirm delete' : 'Delete draft'}
           >
             <Trash2 size={16} />
           </button>

@@ -28,15 +28,15 @@ const WinProbabilityBadge: React.FC<WinProbabilityBadgeProps> = ({
     if (isTooClose) return 'text-gray-400';
     if (probabilityPercentage >= 70) return 'text-green-400';
     if (probabilityPercentage >= 55) return 'text-yellow-400';
-    return 'text-gray-400';
+    return 'text-red-400';
   };
   
   return (
     <span className={`text-xs font-jetbrains ${getColorClass()} ${className}`}>
       {isTooClose ? (
-        "Too close to call"
+        "Even match"
       ) : (
-        `Win Chance: ${probabilityPercentage}%`
+        `${probabilityPercentage}% win`
       )}
     </span>
   );

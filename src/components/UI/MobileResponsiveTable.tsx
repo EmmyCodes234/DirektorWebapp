@@ -85,7 +85,7 @@ function MobileResponsiveTable<T>({
           onClick={() => onRowClick && onRowClick(item)}
         >
           {columns.map((column) => (
-            <div key={`${keyExtractor(item)}-${column.key}`} className="mb-2 last:mb-0">
+            <div key={`${keyExtractor(item)}-${column.key}`} className="mb-3 last:mb-0">
               <div className="text-xs text-gray-400 font-jetbrains mb-1">{column.header}</div>
               <div>{column.render(item)}</div>
             </div>

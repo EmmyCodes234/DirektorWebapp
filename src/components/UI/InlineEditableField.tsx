@@ -25,6 +25,7 @@ const InlineEditableField: React.FC<InlineEditableFieldProps> = ({
   useEffect(() => {
     if (isEditing && inputRef.current) {
       inputRef.current.focus();
+      inputRef.current.select();
     }
   }, [isEditing]);
 
@@ -99,6 +100,7 @@ const InlineEditableField: React.FC<InlineEditableFieldProps> = ({
               onClick={handleSave}
               disabled={isSaving}
               className="p-2 bg-green-600/20 border border-green-500/50 text-green-400 hover:bg-green-600/30 hover:text-white rounded-lg transition-all duration-200"
+              aria-label="Save changes"
             >
               {isSaving ? (
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -111,13 +113,14 @@ const InlineEditableField: React.FC<InlineEditableFieldProps> = ({
               onClick={handleCancel}
               disabled={isSaving}
               className="p-2 bg-red-600/20 border border-red-500/50 text-red-400 hover:bg-red-600/30 hover:text-white rounded-lg transition-all duration-200"
+              aria-label="Cancel editing"
             >
               <X size={16} />
             </button>
           </div>
         </div>
       ) : (
-        <div className="flex items-center justify-between group">
+        <div className="flex items-center justify-between group py-2 px-3 border border-transparent hover:border-gray-700 rounded-lg">
           <div className="text-white font-jetbrains">
             {value}
           </div>
@@ -125,6 +128,7 @@ const InlineEditableField: React.FC<InlineEditableFieldProps> = ({
           <button
             onClick={handleEdit}
             className="p-1 text-gray-500 opacity-0 group-hover:opacity-100 hover:text-blue-400 transition-all duration-200"
+            aria-label="Edit value"
           >
             <Edit3 size={14} />
           </button>

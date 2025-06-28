@@ -93,7 +93,7 @@ const TournamentCompleteSummary: React.FC<TournamentCompleteSummaryProps> = ({
       )}
       
       {/* Action Buttons */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <button
           onClick={onExportTou}
           className="flex flex-col items-center gap-2 p-4 bg-blue-900/20 border border-blue-500/30 rounded-xl hover:bg-blue-900/30 transition-all duration-200"
@@ -120,7 +120,7 @@ const TournamentCompleteSummary: React.FC<TournamentCompleteSummaryProps> = ({
       </div>
       
       {/* Public Link */}
-      <div className="mt-8 text-center">
+      <div className="text-center">
         <p className="text-gray-400 font-jetbrains mb-2">
           View complete tournament results:
         </p>
