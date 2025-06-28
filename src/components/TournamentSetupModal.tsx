@@ -19,8 +19,8 @@ interface FormData {
   name: string;
   date: string;
   venue: string;
-  rounds: number | '';
-  divisions: number | '';
+  rounds: number;
+  divisions: number;
   divisionNames: string[];
   teamMode: boolean;
   isPasswordProtected: boolean;
@@ -180,8 +180,8 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
     name: '',
     date: '',
     venue: '',
-    rounds: '',
-    divisions: '',
+    rounds: 7,
+    divisions: 1,
     divisionNames: ['Main Division'],
     teamMode: false,
     isPasswordProtected: false,
@@ -198,13 +198,11 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
 
   const { logAction } = useAuditLog();
   
-  // Draft system
+  // Draft system integration
   const {
-    currentDraft,
     createDraft,
     loadDraft,
     updateDraft,
-    saveDraftNow,
     completeDraft,
     isSaving,
     lastSaved,
@@ -212,31 +210,31 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
     isOnline
   } = useTournamentDraftSystem();
   
-  // Initialize draft if draftId is provided
+  const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
+
+  // Load draft if draftId is provided
   useEffect(() => {
     if (isOpen && draftId) {
-      initializeDraft();
-    } else if (isOpen && !draftId) {
-      // Create a new draft
-      createNewDraft();
+      loadDraftData(draftId);
+    } else if (isOpen) {
+      // Create a new draft when modal opens
+      initializeNewDraft();
     }
   }, [isOpen, draftId]);
-  
-  const initializeDraft = async () => {
-    if (!draftId) return;
-    
+
+  const loadDraftData = async (id: string) => {
     try {
       setIsLoading(true);
+      const draft = await loadDraft(id);
       
-      const draft = await loadDraft(draftId);
       if (draft && draft.data) {
-        // Restore form data from draft
+        // Set form data from draft
         setFormData({
           name: draft.data.name || '',
           date: draft.data.date || '',
           venue: draft.data.venue || '',
-          rounds: draft.data.rounds || '',
-          divisions: draft.data.divisions || '',
+          rounds: draft.data.rounds || 7,
+          divisions: draft.data.divisions || 1,
           divisionNames: draft.data.divisionNames || ['Main Division'],
           teamMode: draft.data.teamMode || false,
           isPasswordProtected: draft.data.isPasswordProtected || false,
@@ -245,70 +243,52 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
           showPassword: false
         });
         
-        // Restore wizard responses
+        // Set wizard responses if available
         if (draft.data.wizardResponses) {
           setWizardResponses(draft.data.wizardResponses);
         }
         
-        // Restore pairing format
+        // Set pairing format if available
         if (draft.data.selectedPairingFormat) {
           setSelectedPairingFormat(draft.data.selectedPairingFormat);
         }
         
-        // Restore recommended system
+        // Set recommended system if available
         if (draft.data.recommendedSystem) {
           setRecommendedSystem(draft.data.recommendedSystem);
+          setRecommendationReasoning(draft.data.recommendationReasoning || '');
         }
         
-        // Restore recommendation reasoning
-        if (draft.data.recommendationReasoning) {
-          setRecommendationReasoning(draft.data.recommendationReasoning);
-        }
-        
-        // Restore current step
+        // Set current step if available
         if (draft.data.currentStep) {
           setCurrentStep(draft.data.currentStep);
         }
         
-        // Restore wizard step index
+        // Set wizard step index if available
         if (draft.data.wizardStepIndex !== undefined) {
           setWizardStepIndex(draft.data.wizardStepIndex);
         }
         
-        // Log draft loaded
-        logAction({
-          action: 'tournament_draft_loaded',
-          details: {
-            draft_id: draftId,
-            draft_name: draft.data.name || 'Untitled Tournament'
-          }
-        });
+        setCurrentDraftId(id);
       }
     } catch (err) {
-      console.error('Error initializing draft:', err);
+      console.error('Error loading draft:', err);
       setError('Failed to load draft data');
     } finally {
       setIsLoading(false);
     }
   };
   
-  const createNewDraft = async () => {
+  const initializeNewDraft = async () => {
     try {
       // Create a new draft with initial data
       const newDraftId = await createDraft({
         name: 'New Tournament',
-        step: 'basic',
-        currentStep: 'basic'
+        step: 'basic-info'
       });
       
       if (newDraftId) {
-        // Log new draft created
-        logAction({
-          action: 'tournament_draft_created',
-          details: {
-            draft_id: newDraftId
-          }
-        });
+        setCurrentDraftId(newDraftId);
       }
     } catch (err) {
       console.error('Error creating new draft:', err);
@@ -317,26 +297,64 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
   
   // Update draft when form data changes
   useEffect(() => {
-    if (currentDraft) {
-      updateDraft(currentDraft.id, {
-        ...formData,
-        wizardResponses,
-        selectedPairingFormat,
-        recommendedSystem,
-        recommendationReasoning,
-        currentStep,
-        wizardStepIndex
-      });
+    if (currentDraftId) {
+      updateDraftData();
     }
-  }, [formData, wizardResponses, selectedPairingFormat, recommendedSystem, recommendationReasoning, currentStep, wizardStepIndex]);
+  }, [formData, wizardResponses, selectedPairingFormat, recommendedSystem, currentStep, wizardStepIndex]);
+  
+  const updateDraftData = () => {
+    if (!currentDraftId) return;
+    
+    // Determine checkpoint based on current step
+    let checkpoint: string | undefined;
+    if (currentStep === 'basic' && formData.name && formData.date) {
+      checkpoint = 'basicInfo';
+    } else if (currentStep === 'pairing-method') {
+      checkpoint = 'pairingMethod';
+    } else if (currentStep === 'review') {
+      checkpoint = 'review';
+    }
+    
+    // Update draft with current state
+    updateDraft(currentDraftId, {
+      name: formData.name || 'New Tournament',
+      date: formData.date,
+      venue: formData.venue,
+      rounds: formData.rounds,
+      divisions: formData.divisions,
+      divisionNames: formData.divisionNames,
+      teamMode: formData.teamMode,
+      isPasswordProtected: formData.isPasswordProtected,
+      password: formData.password,
+      publicSharingEnabled: formData.publicSharingEnabled,
+      wizardResponses,
+      selectedPairingFormat,
+      recommendedSystem,
+      recommendationReasoning,
+      currentStep,
+      wizardStepIndex,
+      step: getCurrentStepLabel()
+    }, checkpoint);
+  };
+  
+  const getCurrentStepLabel = (): string => {
+    switch (currentStep) {
+      case 'basic': return 'Basic Info';
+      case 'pairing-method': return 'Pairing Method';
+      case 'wizard': return 'Pairing Wizard';
+      case 'manual-selection': return 'Pairing Selection';
+      case 'review': return 'Review';
+      default: return 'Setup';
+    }
+  };
 
   const handleInputChange = (field: keyof FormData, value: string | number | boolean) => {
     setFormData(prev => {
       const updated = { ...prev, [field]: value };
       
       // Update division names when division count changes
-      if (field === 'divisions' && typeof value === 'number') {
-        const divisionCount = value;
+      if (field === 'divisions') {
+        const divisionCount = value as number;
         const newDivisionNames = Array.from({ length: divisionCount }, (_, i) => {
           return prev.divisionNames[i] || `Division ${String.fromCharCode(65 + i)}`;
         });
@@ -363,23 +381,15 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
       setError('Tournament date is required');
       return false;
     }
-    if (formData.rounds === '') {
-      setError('Number of rounds is required');
-      return false;
-    }
-    if (typeof formData.rounds === 'number' && (formData.rounds < 1 || formData.rounds > 15)) {
+    if (formData.rounds < 1 || formData.rounds > 15) {
       setError('Number of rounds must be between 1 and 15');
       return false;
     }
-    if (formData.divisions === '') {
-      setError('Number of divisions is required');
-      return false;
-    }
-    if (typeof formData.divisions === 'number' && (formData.divisions < 1 || formData.divisions > 10)) {
+    if (formData.divisions < 1 || formData.divisions > 10) {
       setError('Number of divisions must be between 1 and 10');
       return false;
     }
-    for (let i = 0; i < (typeof formData.divisions === 'number' ? formData.divisions : 0); i++) {
+    for (let i = 0; i < formData.divisions; i++) {
       if (!formData.divisionNames[i]?.trim()) {
         setError(`Division ${i + 1} name is required`);
         return false;
@@ -392,14 +402,9 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
     return true;
   };
 
-  const handleBasicNext = async () => {
+  const handleBasicNext = () => {
     setError(null);
     if (validateBasicForm()) {
-      // Save draft with checkpoint
-      if (currentDraft) {
-        await saveDraftNow(currentDraft.id);
-      }
-      
       // If team mode is selected, skip pairing method selection and go directly to review
       if (formData.teamMode) {
         setSelectedPairingFormat('team-round-robin');
@@ -435,14 +440,9 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
         }
       });
     }
-    
-    // Save draft with checkpoint
-    if (currentDraft) {
-      updateDraft(currentDraft.id, { step: 'pairingMethod' }, 'pairingMethod');
-    }
   };
 
-  const handleWizardResponse = async (value: string) => {
+  const handleWizardResponse = (value: string) => {
     const currentWizardStep = WIZARD_STEPS[wizardStepIndex];
     const updatedResponses = {
       ...wizardResponses,
@@ -468,11 +468,6 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
       generateRecommendation(updatedResponses);
       setCurrentStep('review');
       
-      // Save draft with checkpoint
-      if (currentDraft) {
-        await saveDraftNow(currentDraft.id);
-      }
-      
       // Log wizard completion
       logAction({
         action: 'pairing_wizard_completed',
@@ -483,16 +478,11 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
     }
   };
 
-  const handleManualSelection = async (format: PairingFormat) => {
+  const handleManualSelection = (format: PairingFormat) => {
     setSelectedPairingFormat(format);
     setRecommendedSystem(format);
     setRecommendationReasoning(`You manually selected ${format.charAt(0).toUpperCase() + format.slice(1).replace('-', ' ')} as your preferred pairing system.`);
     setCurrentStep('review');
-    
-    // Save draft with checkpoint
-    if (currentDraft) {
-      await saveDraftNow(currentDraft.id);
-    }
     
     // Log manual format selection
     logAction({
@@ -524,7 +514,7 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
     const recommendation = recommendPairingSystem({
       primary: responses.suspenseUntilEnd === 'critical' ? 'Max suspense' : 'Max fairness',
       playerCount: 32, // Estimate
-      rounds: typeof formData.rounds === 'number' ? formData.rounds : 7,
+      rounds: formData.rounds,
       competitiveLevel: (responses.competitiveLevel as any) || 'competitive',
       priorityGoals
     });
@@ -579,8 +569,8 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
         name: formData.name.trim(),
         date: formData.date,
         venue: formData.venue.trim() || null,
-        rounds: typeof formData.rounds === 'number' ? formData.rounds : null,
-        divisions: typeof formData.divisions === 'number' ? formData.divisions : null,
+        rounds: formData.rounds,
+        divisions: formData.divisions,
         director_id: user.id,
         status: 'registration' as const,
         team_mode: formData.teamMode,
@@ -631,7 +621,7 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
       }
 
       // Create divisions if multiple
-      if (typeof formData.divisions === 'number' && formData.divisions > 1) {
+      if (formData.divisions > 1) {
         const divisionsToInsert = formData.divisionNames.map((name, index) => ({
           tournament_id: tournament.id,
           name: name.trim(),
@@ -672,17 +662,8 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
       });
       
       // Mark draft as completed
-      if (currentDraft) {
-        await completeDraft(currentDraft.id, tournament.id);
-        
-        // Log draft completion
-        logAction({
-          action: 'tournament_draft_completed',
-          details: {
-            draft_id: currentDraft.id,
-            tournament_id: tournament.id
-          }
-        });
+      if (currentDraftId) {
+        await completeDraft(currentDraftId, tournament.id);
       }
 
       // Success! Call the success callback with tournament ID
@@ -697,19 +678,14 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
   };
 
   const handleClose = () => {
-    // Save draft before closing
-    if (currentDraft) {
-      saveDraftNow(currentDraft.id);
-    }
-    
     setCurrentStep('basic');
     setWizardStepIndex(0);
     setFormData({
       name: '',
       date: '',
       venue: '',
-      rounds: '',
-      divisions: '',
+      rounds: 7,
+      divisions: 1,
       divisionNames: ['Main Division'],
       teamMode: false,
       isPasswordProtected: false,
@@ -761,26 +737,28 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
             </div>
           </div>
           
-          <div className="flex items-center gap-4">
-            {/* Draft Status Indicator */}
-            <DraftStatusIndicator
-              isSaving={isSaving}
-              lastSaved={lastSaved}
-              isOnline={isOnline}
-              error={draftError}
-            />
-            
-            <button
-              onClick={handleClose}
-              className="w-10 h-10 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-all duration-200"
-            >
-              <X size={24} />
-            </button>
-          </div>
+          <button
+            onClick={handleClose}
+            className="w-10 h-10 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-all duration-200"
+          >
+            <X size={24} />
+          </button>
         </div>
 
         {/* Content */}
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+          {/* Draft Status Indicator */}
+          {currentDraftId && (
+            <div className="mb-4">
+              <DraftStatusIndicator
+                isSaving={isSaving}
+                lastSaved={lastSaved}
+                isOnline={isOnline}
+                error={draftError}
+              />
+            </div>
+          )}
+          
           {/* Basic Information Step */}
           {currentStep === 'basic' && (
             <div className="space-y-6">
@@ -839,9 +817,8 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
                     min="1"
                     max="15"
                     value={formData.rounds}
-                    onChange={(e) => handleInputChange('rounds', e.target.value ? parseInt(e.target.value) : '')}
+                    onChange={(e) => handleInputChange('rounds', parseInt(e.target.value) || 7)}
                     className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 font-jetbrains"
-                    placeholder="Enter number of rounds"
                   />
                 </div>
 
@@ -856,9 +833,8 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
                     min="1"
                     max="10"
                     value={formData.divisions}
-                    onChange={(e) => handleInputChange('divisions', e.target.value ? parseInt(e.target.value) : '')}
+                    onChange={(e) => handleInputChange('divisions', parseInt(e.target.value) || 1)}
                     className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 font-jetbrains"
-                    placeholder="Enter number of divisions"
                   />
                 </div>
               </div>
@@ -982,7 +958,7 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
               </div>
 
               {/* Division Names */}
-              {typeof formData.divisions === 'number' && formData.divisions > 1 && (
+              {formData.divisions > 1 && (
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-4 font-jetbrains">
                     Division Names
