@@ -451,13 +451,16 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
 
       if (tournamentError) throw tournamentError;
       
+      // Determine final slug
+      let finalSlug = slug;
+      
       // If we need to update the slug with a unique ID
       if (!slug) {
-        const uniqueSlug = generateTournamentSlug(formData.name, tournament.id);
+        finalSlug = generateTournamentSlug(formData.name, tournament.id);
         
         const { error: slugUpdateError } = await supabase
           .from('tournaments')
-          .update({ slug: uniqueSlug })
+          .update({ slug: finalSlug })
           .eq('id', tournament.id);
           
         if (slugUpdateError) throw slugUpdateError;
@@ -500,7 +503,7 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
           divisions: formData.divisions,
           rounds: formData.rounds,
           password_protected: formData.isPasswordProtected,
-          slug: slug || uniqueSlug
+          slug: finalSlug
         }
       });
 
