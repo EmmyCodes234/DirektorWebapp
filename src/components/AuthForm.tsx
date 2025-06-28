@@ -83,6 +83,7 @@ export default function AuthForm({ onAuthSuccess, initialMode = 'signin' }: Auth
           // Add a small delay to ensure auth state is updated
           setTimeout(() => {
             onAuthSuccess();
+            navigate('/dashboard');
           }, 100);
         } else {
           throw new Error('Failed to establish session');
