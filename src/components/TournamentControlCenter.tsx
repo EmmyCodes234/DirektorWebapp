@@ -148,6 +148,26 @@ const TournamentControlCenter: React.FC = () => {
     setActiveTab('scores');
   };
 
+  // Navigation handlers for ScoreEntry
+  const handleScoreEntryBack = () => {
+    setActiveTab('rounds');
+  };
+
+  const handleScoreEntryNext = () => {
+    setActiveTab('standings');
+  };
+
+  // Navigation handlers for Standings
+  const handleStandingsBack = () => {
+    setActiveTab('scores');
+  };
+
+  const handleStandingsNextRound = async () => {
+    // This would typically advance to the next round
+    await loadTournament(); // Reload tournament data to get updated current_round
+    setActiveTab('rounds');
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
@@ -263,6 +283,8 @@ const TournamentControlCenter: React.FC = () => {
           <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" /></div>}>
             <RoundManager 
               {...commonProps}
+              currentRound={tournament.current_round}
+              maxRounds={tournament.rounds}
               onBack={handleRoundManagerBack}
               onNext={handleRoundManagerNext}
             />
@@ -271,13 +293,24 @@ const TournamentControlCenter: React.FC = () => {
       case 'scores':
         return (
           <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" /></div>}>
-            <ScoreEntry {...commonProps} />
+            <ScoreEntry 
+              {...commonProps}
+              currentRound={tournament.current_round}
+              onBack={handleScoreEntryBack}
+              onNext={handleScoreEntryNext}
+            />
           </Suspense>
         );
       case 'standings':
         return (
           <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" /></div>}>
-            <Standings {...commonProps} />
+            <Standings 
+              {...commonProps}
+              currentRound={tournament.current_round}
+              maxRounds={tournament.rounds}
+              onBack={handleStandingsBack}
+              onNextRound={handleStandingsNextRound}
+            />
           </Suspense>
         );
       case 'statistics':
