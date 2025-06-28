@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Download, Trophy, Target, TrendingUp, Calendar, Users, Medal } from 'lucide-react';
+import { X, Download, Trophy, Target, TrendingUp, Calendar, Users, Medal, Award } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Player, Result, Pairing } from '../types/database';
+import PlayerLink from './PlayerLink';
+import BadgeList from './Badges/BadgeList';
 
 interface PlayerDetailsModalProps {
   isOpen: boolean;
@@ -38,6 +40,7 @@ interface PlayerStats {
   winPercentage: number;
   currentRank: number;
   games: PlayerGame[];
+  badges: any[];
 }
 
 const PlayerDetailsModal: React.FC<PlayerDetailsModalProps> = ({
@@ -91,6 +94,18 @@ const PlayerDetailsModal: React.FC<PlayerDetailsModalProps> = ({
         .eq('pairing.tournament_id', tournamentId);
 
       if (resultsError) throw resultsError;
+
+      // Load badges for this player in this tournament
+      const { data: badgesData, error: badgesError } = await supabase
+        .from('badges')
+        .select(`
+          *,
+          badge_type:badge_types(*)
+        `)
+        .eq('player_id', playerId)
+        .eq('tournament_id', tournamentId);
+
+      if (badgesError) throw badgesError;
 
       // Filter results for this player and process games
       const playerResults = (resultsData || []).filter(result => {
@@ -187,7 +202,8 @@ const PlayerDetailsModal: React.FC<PlayerDetailsModalProps> = ({
         firstMoveGames,
         winPercentage,
         currentRank,
-        games
+        games,
+        badges: badgesData || []
       });
 
     } catch (err) {
@@ -380,7 +396,9 @@ const PlayerDetailsModal: React.FC<PlayerDetailsModalProps> = ({
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-4xl font-bold text-white font-orbitron mb-2">
-                      {playerStats.player.name}
+                      <PlayerLink playerId={playerStats.player.id!} playerName={playerStats.player.name}>
+                        {playerStats.player.name}
+                      </PlayerLink>
                     </h3>
                     <div className="flex items-center gap-6 text-lg text-blue-300">
                       <div className="flex items-center gap-2">
@@ -404,6 +422,18 @@ const PlayerDetailsModal: React.FC<PlayerDetailsModalProps> = ({
                   </div>
                 </div>
               </div>
+
+              {/* Badges Section */}
+              {playerStats.badges.length > 0 && (
+                <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-xl p-6">
+                  <h4 className="text-lg font-bold text-yellow-300 font-orbitron mb-4 flex items-center gap-2">
+                    <Award className="w-5 h-5" />
+                    Badges & Achievements
+                  </h4>
+                  
+                  <BadgeList badges={playerStats.badges} size="sm" />
+                </div>
+              )}
 
               {/* Stats Grid */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
@@ -494,7 +524,9 @@ const PlayerDetailsModal: React.FC<PlayerDetailsModalProps> = ({
                           <td className="px-4 py-4 whitespace-nowrap">
                             <div>
                               <div className="text-sm font-medium text-white">
-                                {game.opponentName}
+                                <PlayerLink playerId={game.opponentId} playerName={game.opponentName}>
+                                  {game.opponentName}
+                                </PlayerLink>
                               </div>
                               <div className="text-xs text-gray-400 font-jetbrains">
                                 #{game.opponentRank} • {game.opponentRating}

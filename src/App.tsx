@@ -25,6 +25,8 @@ import type { User } from '@supabase/supabase-js';
 const ProjectionMode = React.lazy(() => import('./components/ProjectionMode'));
 const QRCodeModal = React.lazy(() => import('./components/QRCodeModal'));
 const Statistics = React.lazy(() => import('./components/Statistics/Statistics'));
+const PlayerProfile = React.lazy(() => import('./components/PlayerProfile'));
+const PlayerLeaderboard = React.lazy(() => import('./components/PlayerLeaderboard'));
 
 type Screen = 'home' | 'dashboard' | 'resume' | 'player-registration' | 'round-manager' | 'score-entry' | 'standings' | 'admin-panel';
 
@@ -62,6 +64,34 @@ function StatisticsRoute() {
       </div>
     }>
       <Statistics tournamentId={tournamentId} isPublic={true} />
+    </Suspense>
+  );
+}
+
+// Player Profile Route Component
+function PlayerProfileRoute() {
+  const { playerId } = useParams<{ playerId: string }>();
+  
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+      </div>
+    }>
+      <PlayerProfile />
+    </Suspense>
+  );
+}
+
+// Player Leaderboard Route Component
+function PlayerLeaderboardRoute() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+      </div>
+    }>
+      <PlayerLeaderboard />
     </Suspense>
   );
 }
@@ -219,6 +249,8 @@ function App() {
         <Route path="/statistics" element={<StatisticsRoute />} />
         <Route path="/projector/:tournamentId/:divisionId" element={<ProjectionModeRoute />} />
         <Route path="/leaderboard/directors" element={<DirectorsLeaderboardRoute />} />
+        <Route path="/leaderboard/players" element={<PlayerLeaderboardRoute />} />
+        <Route path="/players/:playerId" element={<PlayerProfileRoute />} />
         
         {/* Fallback route - redirect to home */}
         <Route path="*" element={<Navigate to="/" replace />} />

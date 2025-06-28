@@ -202,6 +202,46 @@ export interface TournamentConfig {
   recommendation_reasoning: string;
 }
 
+// Gamification System Types
+export interface BadgeType {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  criteria: string;
+  created_at?: string;
+}
+
+export interface Badge {
+  id: string;
+  player_id: string;
+  tournament_id: string;
+  badge_type_id: string;
+  badge_type?: BadgeType;
+  awarded_at: string;
+  created_at?: string;
+}
+
+export interface PlayerProfile {
+  id: string;
+  bio?: string;
+  avatar_url?: string;
+  social_links?: Record<string, string>;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface PlayerWithStats extends Player {
+  badges?: Badge[];
+  profile?: PlayerProfile;
+  tournaments_played?: number;
+  total_wins?: number;
+  total_losses?: number;
+  total_draws?: number;
+  average_spread?: number;
+  highest_score?: number;
+}
+
 // Add global types for Speech Recognition
 declare global {
   interface Window {

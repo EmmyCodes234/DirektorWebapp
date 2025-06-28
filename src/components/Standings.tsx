@@ -3,6 +3,7 @@ import { ArrowLeft, Trophy, Download, ArrowRight, Users, Medal } from 'lucide-re
 import ParticleBackground from './ParticleBackground';
 import Button from './Button';
 import PlayerDetailsModal from './PlayerDetailsModal';
+import PlayerLink from './PlayerLink';
 import { supabase } from '../lib/supabase';
 import { Tournament, Player, Result, Pairing } from '../types/database';
 
@@ -125,6 +126,11 @@ const Standings: React.FC<StandingsProps> = ({
     const standings: PlayerStanding[] = [];
 
     for (const player of players) {
+      // Skip players who are not active
+      if (player.participation_status === 'paused' || player.participation_status === 'withdrawn') {
+        continue;
+      }
+      
       let wins = 0;
       let losses = 0;
       let draws = 0;
@@ -269,7 +275,7 @@ const Standings: React.FC<StandingsProps> = ({
     
     return (
       <span className={resultClass}>
-        {resultText} vs {lastGame.opponentName} ({lastGame.playerScore}–{lastGame.opponentScore})
+        {resultText} vs <PlayerLink playerId={lastGame.opponentId} playerName={lastGame.opponentName}>{lastGame.opponentName}</PlayerLink> ({lastGame.playerScore}–{lastGame.opponentScore})
       </span>
     );
   };
@@ -392,14 +398,15 @@ const Standings: React.FC<StandingsProps> = ({
                       
                       {/* Player Name - Clickable */}
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <button
-                          onClick={() => handlePlayerClick(standing.id)}
-                          className="text-left hover:bg-blue-500/20 rounded-lg p-2 -m-2 transition-all duration-200 group"
+                        <PlayerLink 
+                          playerId={standing.id} 
+                          playerName={standing.name}
+                          className="text-left hover:bg-blue-500/20 rounded-lg p-2 -m-2 transition-all duration-200 group block"
                         >
                           <div className="text-sm font-medium text-white group-hover:text-blue-300 transition-colors duration-200 font-jetbrains">
                             {standing.name} (#{standing.rank})
                           </div>
-                        </button>
+                        </PlayerLink>
                       </td>
                       
                       {/* Last Game */}

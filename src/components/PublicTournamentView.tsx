@@ -4,6 +4,7 @@ import { ArrowLeft, RefreshCw, Users, Trophy, Calendar, MapPin, Download, Chevro
 import ParticleBackground from './ParticleBackground';
 import PlayerDetailsModal from './PlayerDetailsModal';
 import TournamentHeader from './TournamentHeader';
+import PlayerLink from './PlayerLink';
 import { supabase } from '../lib/supabase';
 import { useAuditLog } from '../hooks/useAuditLog';
 import { Tournament, Division, Player, PairingWithPlayers, Result } from '../types/database';
@@ -287,6 +288,11 @@ const PublicTournamentView: React.FC = () => {
     const standings: PlayerStanding[] = [];
 
     for (const player of players) {
+      // Skip players who are not active
+      if (player.participation_status === 'paused' || player.participation_status === 'withdrawn') {
+        continue;
+      }
+      
       let wins = 0;
       let losses = 0;
       let draws = 0;
@@ -311,7 +317,6 @@ const PublicTournamentView: React.FC = () => {
         pointsAgainst += opponentScore;
         gamesPlayed++;
 
-        // Determine result
         if (playerScore > opponentScore) {
           wins++;
         } else if (playerScore < opponentScore) {
@@ -354,8 +359,7 @@ const PublicTournamentView: React.FC = () => {
   };
 
   const handlePlayerClick = (playerId: string) => {
-    setSelectedPlayerId(playerId);
-    setShowPlayerModal(true);
+    navigate(`/players/${playerId}`);
     
     // Log player details view
     logAction({
@@ -430,11 +434,11 @@ const PublicTournamentView: React.FC = () => {
   const getRankStyle = (rank: number) => {
     switch (rank) {
       case 1:
-        return 'bg-gradient-to-r from-yellow-500/20 to-yellow-600/20 border-yellow-500/50 text-yellow-400';
+        return 'bg-gradient-to-r from-yellow-500/20 to-yellow-600/20 border-yellow-500/50';
       case 2:
-        return 'bg-gradient-to-r from-gray-400/20 to-gray-500/20 border-gray-400/50 text-gray-300';
+        return 'bg-gradient-to-r from-gray-400/20 to-gray-500/20 border-gray-400/50';
       case 3:
-        return 'bg-gradient-to-r from-amber-600/20 to-amber-700/20 border-amber-600/50 text-amber-400';
+        return 'bg-gradient-to-r from-amber-600/20 to-amber-700/20 border-amber-600/50';
       default:
         return '';
     }
@@ -856,17 +860,17 @@ const PublicTournamentView: React.FC = () => {
                                     {pairing.first_move_player_id === pairing.player1_id && (
                                       <div className="w-3 h-3 bg-green-500 rounded-full" title="First move"></div>
                                     )}
-                                    <button
-                                      onClick={() => handlePlayerClick(pairing.player1.id)}
-                                      className="text-left hover:text-blue-300 transition-colors duration-200"
+                                    <PlayerLink 
+                                      playerId={pairing.player1.id} 
+                                      playerName={pairing.player1.name}
                                     >
-                                      <div className="text-sm font-medium text-white">
+                                      <div className="text-sm font-medium text-white hover:text-blue-300 transition-colors duration-200">
                                         {pairing.player1.name}
                                       </div>
                                       <div className="text-xs text-gray-400 font-jetbrains">
                                         #{pairing.player1_rank} • {pairing.player1.rating}
                                       </div>
-                                    </button>
+                                    </PlayerLink>
                                   </div>
                                 </td>
                                 
@@ -887,17 +891,17 @@ const PublicTournamentView: React.FC = () => {
                                     {pairing.first_move_player_id === pairing.player2_id && (
                                       <div className="w-3 h-3 bg-green-500 rounded-full" title="First move"></div>
                                     )}
-                                    <button
-                                      onClick={() => handlePlayerClick(pairing.player2.id)}
-                                      className="text-left hover:text-blue-300 transition-colors duration-200"
+                                    <PlayerLink 
+                                      playerId={pairing.player2.id} 
+                                      playerName={pairing.player2.name}
                                     >
-                                      <div className="text-sm font-medium text-white">
+                                      <div className="text-sm font-medium text-white hover:text-blue-300 transition-colors duration-200">
                                         {pairing.player2.name}
                                       </div>
                                       <div className="text-xs text-gray-400 font-jetbrains">
                                         #{pairing.player2_rank} • {pairing.player2.rating}
                                       </div>
-                                    </button>
+                                    </PlayerLink>
                                   </div>
                                 </td>
                                 
@@ -957,38 +961,37 @@ const PublicTournamentView: React.FC = () => {
                   <table className="w-full">
                     <thead className="bg-gray-800/50">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider font-jetbrains">Rank</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider font-jetbrains">Player</th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider font-jetbrains">W-L-D</th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider font-jetbrains">Points</th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider font-jetbrains">Spread</th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider font-jetbrains">Games</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider font-jetbrains">Rank</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider font-jetbrains">Player</th>
+                        <th className="px-6 py-4 text-center text-xs font-medium text-gray-300 uppercase tracking-wider font-jetbrains">W-L-D</th>
+                        <th className="px-6 py-4 text-center text-xs font-medium text-gray-300 uppercase tracking-wider font-jetbrains">Points</th>
+                        <th className="px-6 py-4 text-center text-xs font-medium text-gray-300 uppercase tracking-wider font-jetbrains">Spread</th>
+                        <th className="px-6 py-4 text-center text-xs font-medium text-gray-300 uppercase tracking-wider font-jetbrains">Games</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-700">
                       {filteredStandings.map((standing) => (
                         <tr 
                           key={standing.id} 
-                          className={`transition-colors duration-200 hover:bg-gray-800/30 ${
-                            getRankStyle(standing.rank)
-                          } ${
+                          className={`transition-colors duration-200 hover:bg-gray-800/30 ${getRankStyle(standing.rank)} ${
                             searchQuery && standing.name.toLowerCase().includes(searchQuery.toLowerCase())
                               ? 'bg-blue-900/20 border-y border-blue-500/30'
                               : ''
                           }`}
                         >
-                          <td className="px-4 py-4 whitespace-nowrap">
+                          <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center gap-2">
-                              <span className="text-lg font-bold font-orbitron">
+                              <span className="text-lg font-bold font-orbitron text-white">
                                 {getRankIcon(standing.rank)}
                               </span>
                             </div>
                           </td>
                           
-                          <td className="px-4 py-4 whitespace-nowrap">
-                            <button
-                              onClick={() => handlePlayerClick(standing.id)}
-                              className="text-left hover:bg-blue-500/20 rounded-lg p-2 -m-2 transition-all duration-200 group"
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <PlayerLink 
+                              playerId={standing.id} 
+                              playerName={standing.name}
+                              className="text-left hover:bg-blue-500/20 rounded-lg p-2 -m-2 transition-all duration-200 group block"
                             >
                               <div className="text-sm font-medium text-white group-hover:text-blue-300 transition-colors duration-200">
                                 {standing.name}
@@ -996,10 +999,10 @@ const PublicTournamentView: React.FC = () => {
                               <div className="text-xs text-gray-400 font-jetbrains">
                                 Rating: {standing.rating}
                               </div>
-                            </button>
+                            </PlayerLink>
                           </td>
                           
-                          <td className="px-4 py-4 text-center">
+                          <td className="px-6 py-4 text-center">
                             <div className="font-mono text-sm text-white">
                               <span className="text-green-400">{standing.wins}</span>–
                               <span className="text-red-400">{standing.losses}</span>–
@@ -1007,13 +1010,13 @@ const PublicTournamentView: React.FC = () => {
                             </div>
                           </td>
                           
-                          <td className="px-4 py-4 text-center">
+                          <td className="px-6 py-4 text-center">
                             <span className="text-lg font-bold text-white font-orbitron">
                               {standing.points}
                             </span>
                           </td>
                           
-                          <td className="px-4 py-4 text-center">
+                          <td className="px-6 py-4 text-center">
                             <span className={`font-mono text-sm ${
                               standing.spread > 0 ? 'text-green-400' : 
                               standing.spread < 0 ? 'text-red-400' : 'text-gray-400'
@@ -1022,7 +1025,7 @@ const PublicTournamentView: React.FC = () => {
                             </span>
                           </td>
                           
-                          <td className="px-4 py-4 text-center">
+                          <td className="px-6 py-4 text-center">
                             <span className="text-sm text-gray-300 font-mono">
                               {standing.gamesPlayed}
                             </span>
@@ -1066,19 +1069,6 @@ const PublicTournamentView: React.FC = () => {
           </div>
         </footer>
       </div>
-
-      {/* Player Details Modal */}
-      {selectedPlayerId && (
-        <PlayerDetailsModal
-          isOpen={showPlayerModal}
-          onClose={() => {
-            setShowPlayerModal(false);
-            setSelectedPlayerId(null);
-          }}
-          playerId={selectedPlayerId}
-          tournamentId={tournament.id}
-        />
-      )}
 
       {/* Background Effects */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/30 pointer-events-none"></div>
