@@ -40,6 +40,8 @@ const PlayerRegistration: React.FC<PlayerRegistrationProps> = ({
   const [publicUrl, setPublicUrl] = useState<string>('');
   const [linkCopied, setLinkCopied] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+  const [currentStep, setCurrentStep] = useState<'team-setup' | 'player-registration' | 'schedule-generation'>('team-setup');
+  const [hasRegisteredPlayers, setHasRegisteredPlayers] = useState(false);
 
   const getPlaceholderText = (isTeamMode: boolean) => {
     if (isTeamMode) {
@@ -105,9 +107,9 @@ James Rodriguez, 1856`;
 
       // Generate public URL using slug if available
       if (tournamentData.slug) {
-        setPublicUrl(`https://direktorweb.com/tournaments/${tournamentData.slug}`);
+        setPublicUrl(`https://direktorweb.site/tournaments/${tournamentData.slug}`);
       } else {
-        setPublicUrl(`https://direktorweb.com/t/${tournamentId}`);
+        setPublicUrl(`https://direktorweb.site/t/${tournamentId}`);
       }
 
       // Load divisions if they exist
@@ -173,6 +175,17 @@ James Rodriguez, 1856`;
         await loadTeams();
       }
 
+      // Check if there are already registered players
+      const { data: existingPlayers, error: playersError } = await supabase
+        .from('players')
+        .select('id')
+        .eq('tournament_id', tournamentId)
+        .limit(1);
+        
+      if (!playersError && existingPlayers && existingPlayers.length > 0) {
+        setHasRegisteredPlayers(true);
+      }
+
     } catch (err: any) {
       console.error('Error loading tournament data:', err);
       const errorMessage = handleSupabaseError(err, 'loading tournament data');
@@ -198,6 +211,11 @@ James Rodriguez, 1856`;
       });
 
       setTeams(teamsData || []);
+      
+      // If we have teams, move to player registration step
+      if (teamsData && teamsData.length > 0) {
+        setCurrentStep('player-registration');
+      }
     } catch (err: any) {
       console.error('Error loading teams:', err);
       // Don't show error for teams loading failure, just log it
@@ -285,6 +303,7 @@ James Rodriguez, 1856`;
       setParsedPlayers([]);
       setShowPreview(false);
       setRetryCount(0); // Reset retry count on success
+      setHasRegisteredPlayers(true);
 
       // Move to next division or finish
       if (isLastDivision) {
@@ -294,6 +313,7 @@ James Rodriguez, 1856`;
           const teamNames = Array.from(new Set(validPlayers.map(p => p.team_name).filter(Boolean)));
           if (teamNames.length >= 2) {
             setShowScheduleModal(true);
+            setCurrentStep('schedule-generation');
           } else {
             onNext();
           }
@@ -567,20 +587,96 @@ James Rodriguez, 1856`;
           </div>
         </div>
 
+        {/* Progress Steps */}
+        {isTeamMode && (
+          <div className="max-w-6xl mx-auto w-full mb-8">
+            <div className="bg-gray-900/50 border border-gray-700 rounded-xl p-4 backdrop-blur-sm">
+              <div className="flex flex-col sm:flex-row items-center justify-between">
+                <div className="flex items-center gap-4 mb-4 sm:mb-0">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                    currentStep === 'team-setup' 
+                      ? 'bg-blue-500 text-white' 
+                      : currentStep === 'player-registration' || currentStep === 'schedule-generation'
+                      ? 'bg-green-500 text-white'
+                      : 'bg-gray-700 text-gray-300'
+                  }`}>
+                    <span className="font-bold">1</span>
+                  </div>
+                  <div className="h-1 w-8 bg-gray-700"></div>
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                    currentStep === 'player-registration' || currentStep === 'schedule-generation'
+                      ? 'bg-blue-500 text-white' 
+                      : 'bg-gray-700 text-gray-300'
+                  }`}>
+                    <span className="font-bold">2</span>
+                  </div>
+                  <div className="h-1 w-8 bg-gray-700"></div>
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                    currentStep === 'schedule-generation'
+                      ? 'bg-blue-500 text-white' 
+                      : 'bg-gray-700 text-gray-300'
+                  }`}>
+                    <span className="font-bold">3</span>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-4 text-sm font-jetbrains">
+                  <div className={currentStep === 'team-setup' ? 'text-blue-400 font-medium' : 'text-gray-400'}>
+                    Team Setup
+                  </div>
+                  <div className={currentStep === 'player-registration' ? 'text-blue-400 font-medium' : 'text-gray-400'}>
+                    Player Registration
+                  </div>
+                  <div className={currentStep === 'schedule-generation' ? 'text-blue-400 font-medium' : 'text-gray-400'}>
+                    Schedule Generation
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Team Manager Section */}
-        {isTeamMode && showTeamManager && (
+        {isTeamMode && (currentStep === 'team-setup' || showTeamManager) && (
           <div className="max-w-6xl mx-auto w-full mb-8">
             <div className="bg-gray-900/50 border border-gray-700 rounded-xl p-6 backdrop-blur-sm">
               <TeamManager 
                 tournamentId={tournamentId} 
                 onTeamsUpdated={loadTeams}
               />
+              
+              {/* Continue Button */}
+              {currentStep === 'team-setup' && teams.length >= 2 && (
+                <div className="mt-6 flex justify-end">
+                  <button
+                    onClick={() => setCurrentStep('player-registration')}
+                    className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-jetbrains font-medium transition-all duration-200"
+                  >
+                    <ChevronRight size={16} />
+                    Continue to Player Registration
+                  </button>
+                </div>
+              )}
+              
+              {/* Team Requirement Warning */}
+              {currentStep === 'team-setup' && teams.length < 2 && (
+                <div className="mt-6 bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-yellow-300 font-jetbrains text-sm">
+                        You need to create at least 2 teams before continuing to player registration.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
 
         {/* Team Mode Banner */}
-        {isTeamMode && (
+        {isTeamMode && currentStep === 'player-registration' && (
           <div className="max-w-6xl mx-auto w-full mb-8">
             <div className="bg-blue-900/20 border border-blue-500/30 rounded-xl p-6 backdrop-blur-sm">
               <div className="flex items-center gap-2 mb-2">
@@ -668,7 +764,7 @@ James Rodriguez, 1856`;
         {/* Main Content Header */}
         <div className="text-center mb-12 max-w-4xl mx-auto">
           {/* Division Progress */}
-          {divisions.length > 1 && (
+          {divisions.length > 1 && currentStep === 'player-registration' && (
             <div className="fade-up fade-up-delay-1 mb-8">
               <div className="flex items-center justify-center gap-4 mb-4">
                 {divisions.map((division, index) => (
@@ -703,7 +799,7 @@ James Rodriguez, 1856`;
           )}
 
           {/* Current Division Title */}
-          {currentDivision && (
+          {currentDivision && currentStep === 'player-registration' && (
             <div className="fade-up fade-up-delay-2">
               <h2 className="text-2xl md:text-3xl font-bold mb-4 text-white font-orbitron">
                 Register {isTeamMode ? 'Teams' : 'Players'} for {currentDivision.name}
@@ -717,42 +813,36 @@ James Rodriguez, 1856`;
               <div className="w-24 h-1 bg-gradient-to-r from-blue-500 to-green-500 mx-auto rounded-full"></div>
             </div>
           )}
+          
+          {/* Team Setup Title */}
+          {currentStep === 'team-setup' && (
+            <div className="fade-up fade-up-delay-2">
+              <h2 className="text-2xl md:text-3xl font-bold mb-4 text-white font-orbitron">
+                Team Setup
+              </h2>
+              <p className="text-lg text-gray-300 mb-6 font-light tracking-wide">
+                Create teams for your tournament
+              </p>
+              <div className="w-24 h-1 bg-gradient-to-r from-blue-500 to-green-500 mx-auto rounded-full"></div>
+            </div>
+          )}
+          
+          {/* Schedule Generation Title */}
+          {currentStep === 'schedule-generation' && (
+            <div className="fade-up fade-up-delay-2">
+              <h2 className="text-2xl md:text-3xl font-bold mb-4 text-white font-orbitron">
+                Generate Team Schedule
+              </h2>
+              <p className="text-lg text-gray-300 mb-6 font-light tracking-wide">
+                Create a round-robin schedule for all teams
+              </p>
+              <div className="w-24 h-1 bg-gradient-to-r from-blue-500 to-green-500 mx-auto rounded-full"></div>
+            </div>
+          )}
         </div>
 
         {/* Main Content */}
         <div className="flex-1 max-w-6xl mx-auto w-full">
-          {/* Input Section */}
-          <div className="fade-up fade-up-delay-3 mb-8">
-            <div className="bg-gray-900/50 border border-gray-700 rounded-xl p-6 backdrop-blur-sm">
-              <label className="block text-white text-lg font-medium mb-4 font-jetbrains">
-                {isTeamMode ? 'Team Player List:' : 'Player List (Name, Rating):'}
-              </label>
-              
-              <div className="relative">
-                <textarea
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  placeholder={getPlaceholderText(isTeamMode)}
-                  className="w-full h-64 bg-gray-800/50 border-2 border-gray-600 rounded-xl px-6 py-4 text-white font-jetbrains text-sm leading-relaxed resize-none focus:border-blue-500 focus:outline-none transition-colors duration-300 backdrop-blur-sm placeholder-gray-500"
-                  style={{ fontFamily: 'JetBrains Mono, monospace' }}
-                />
-                <div className="absolute bottom-4 right-4 text-gray-500 text-xs font-jetbrains">
-                  {inputText.split('\n').filter(line => line.trim()).length} lines
-                </div>
-              </div>
-
-              <div className="mt-4 text-center">
-                <Button
-                  icon={Eye}
-                  label={`Preview ${isTeamMode ? 'Teams' : 'Players'}`}
-                  onClick={handlePreviewPlayers}
-                  variant="blue"
-                  className="max-w-md mx-auto"
-                />
-              </div>
-            </div>
-          </div>
-
           {/* Error Display */}
           {error && (
             <div className="mb-8">
@@ -776,6 +866,40 @@ James Rodriguez, 1856`;
                       Retry
                     </button>
                   )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Input Section - Only show in player registration step */}
+          {currentStep === 'player-registration' && (
+            <div className="fade-up fade-up-delay-3 mb-8">
+              <div className="bg-gray-900/50 border border-gray-700 rounded-xl p-6 backdrop-blur-sm">
+                <label className="block text-white text-lg font-medium mb-4 font-jetbrains">
+                  {isTeamMode ? 'Team Player List:' : 'Player List (Name, Rating):'}
+                </label>
+                
+                <div className="relative">
+                  <textarea
+                    value={inputText}
+                    onChange={(e) => setInputText(e.target.value)}
+                    placeholder={getPlaceholderText(isTeamMode)}
+                    className="w-full h-64 bg-gray-800/50 border-2 border-gray-600 rounded-xl px-6 py-4 text-white font-jetbrains text-sm leading-relaxed resize-none focus:border-blue-500 focus:outline-none transition-colors duration-300 backdrop-blur-sm placeholder-gray-500"
+                    style={{ fontFamily: 'JetBrains Mono, monospace' }}
+                  />
+                  <div className="absolute bottom-4 right-4 text-gray-500 text-xs font-jetbrains">
+                    {inputText.split('\n').filter(line => line.trim()).length} lines
+                  </div>
+                </div>
+
+                <div className="mt-4 text-center">
+                  <Button
+                    icon={Eye}
+                    label={`Preview ${isTeamMode ? 'Teams' : 'Players'}`}
+                    onClick={handlePreviewPlayers}
+                    variant="blue"
+                    className="max-w-md mx-auto"
+                  />
                 </div>
               </div>
             </div>
@@ -814,14 +938,34 @@ James Rodriguez, 1856`;
             </div>
           )}
 
+          {/* Team Mode - No Players Warning */}
+          {isTeamMode && currentStep === 'player-registration' && !showPreview && !hasRegisteredPlayers && (
+            <div className="fade-up mb-8">
+              <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-xl p-6 text-center">
+                <div className="flex items-center justify-center gap-2 mb-4">
+                  <AlertTriangle className="w-6 h-6 text-yellow-400" />
+                  <span className="text-yellow-400 font-orbitron font-bold text-lg">
+                    Player Registration Required
+                  </span>
+                </div>
+                <p className="text-gray-300 font-jetbrains mb-4">
+                  You must register at least one player for each team before proceeding to the tournament control center.
+                </p>
+                <p className="text-yellow-300 font-jetbrains text-sm">
+                  Enter player details in the format: <span className="font-bold">Name, Rating ; ; team TeamName</span>
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Tournament Dashboard Button */}
-          {allDivisionsCompleted && (
+          {(allDivisionsCompleted || (hasRegisteredPlayers && !isTeamMode)) && (
             <div className="fade-up text-center mb-8">
               <div className="bg-green-900/30 border border-green-500/50 rounded-xl p-6 mb-6">
                 <div className="flex items-center justify-center gap-2 mb-4">
                   <CheckCircle className="w-6 h-6 text-green-400" />
                   <span className="text-green-400 font-orbitron font-bold text-lg">
-                    All Divisions Completed!
+                    {isTeamMode ? 'Team Registration Complete!' : 'Player Registration Complete!'}
                   </span>
                 </div>
                 <p className="text-gray-300 font-jetbrains">
@@ -856,8 +1000,8 @@ James Rodriguez, 1856`;
         <footer className="fade-up text-center mt-8">
           <p className="text-gray-500 text-sm font-light tracking-wider">
             {isTeamMode 
-              ? 'Format: Name, Rating ; ; team TeamName • Share the public link for live following'
-              : 'Format: Name, Rating (e.g., "John Smith, 1650") • Share the public link for live following'
+              ? "Format: Name, Rating ; ; team TeamName • Share the public link for live following"
+              : "Format: Name, Rating (e.g., \"John Smith, 1650\") • Share the public link for live following"
             }
           </p>
           <div className="mt-4 flex items-center justify-center gap-2">

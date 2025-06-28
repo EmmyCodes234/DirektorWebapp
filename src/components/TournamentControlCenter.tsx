@@ -13,6 +13,7 @@ const QRCodeModal = React.lazy(() => import('./QRCodeModal'));
 const Statistics = React.lazy(() => import('./Statistics/Statistics'));
 const PlayerRoster = React.lazy(() => import('./PlayerRoster'));
 const AddPlayerModal = React.lazy(() => import('./AddPlayerModal'));
+const PlayerRegistration = React.lazy(() => import('./PlayerRegistration'));
 
 interface Tournament {
   id: string;
@@ -25,7 +26,7 @@ interface Tournament {
   public_sharing_enabled: boolean;
 }
 
-type ActiveTab = 'players' | 'rounds' | 'scores' | 'standings' | 'admin' | 'statistics';
+type ActiveTab = 'players' | 'rounds' | 'scores' | 'standings' | 'admin' | 'statistics' | 'registration';
 
 const TournamentControlCenter: React.FC = () => {
   const { tournamentId } = useParams<{ tournamentId: string }>();
@@ -39,6 +40,7 @@ const TournamentControlCenter: React.FC = () => {
   const [showQRModal, setShowQRModal] = useState(false);
   const [showAddPlayerModal, setShowAddPlayerModal] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [hasRegisteredPlayers, setHasRegisteredPlayers] = useState(false);
 
   useEffect(() => {
     initializeComponent();
@@ -105,6 +107,22 @@ const TournamentControlCenter: React.FC = () => {
       }
 
       setTournament(data);
+      
+      // Check if there are registered players
+      const { data: players, error: playersError } = await supabase
+        .from('players')
+        .select('id')
+        .eq('tournament_id', tournamentId)
+        .limit(1);
+        
+      if (!playersError && players && players.length > 0) {
+        setHasRegisteredPlayers(true);
+      } else {
+        // If no players and this is a team tournament, start with registration tab
+        if (data.team_mode) {
+          setActiveTab('registration');
+        }
+      }
     } catch (err: any) {
       console.error('Error loading tournament:', err);
       setError(err.message || 'Failed to load tournament');
@@ -133,6 +151,7 @@ const TournamentControlCenter: React.FC = () => {
 
   const handlePlayerAdded = () => {
     setShowAddPlayerModal(false);
+    setHasRegisteredPlayers(true);
     // Refresh player roster if needed
     if (activeTab === 'players') {
       // The PlayerRoster component will handle its own refresh
@@ -142,6 +161,16 @@ const TournamentControlCenter: React.FC = () => {
   const retryConnection = async () => {
     setConnectionError(null);
     await initializeComponent();
+  };
+
+  // Navigation handlers for PlayerRegistration
+  const handlePlayerRegistrationBack = () => {
+    navigate('/dashboard');
+  };
+
+  const handlePlayerRegistrationNext = () => {
+    setHasRegisteredPlayers(true);
+    setActiveTab('rounds');
   };
 
   if (loading) {
@@ -228,6 +257,64 @@ const TournamentControlCenter: React.FC = () => {
     );
   }
 
+  // Team tournament with no players - force registration
+  if (tournament.team_mode && !hasRegisteredPlayers) {
+    return (
+      <div className="min-h-screen bg-black">
+        {/* Header */}
+        <div className="bg-gray-900/50 backdrop-blur-lg border-b border-gray-800/50">
+          <div className="max-w-7xl mx-auto px-4 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={handleBack}
+                  className="flex items-center gap-2 px-3 py-2 bg-gray-800/50 hover:bg-gray-700/50 rounded-lg text-gray-300 hover:text-white transition-all duration-200 border border-gray-700/50"
+                >
+                  <ArrowLeft size={18} />
+                  <span className="font-jetbrains text-sm">Back</span>
+                </button>
+                
+                <div>
+                  <h1 className="text-2xl font-bold text-white font-orbitron">{tournament.name}</h1>
+                  <p className="text-gray-400 font-jetbrains text-sm">
+                    Team Tournament • Registration Required
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-xl p-6 mb-6">
+            <div className="flex items-center gap-3 mb-4">
+              <AlertTriangle className="w-6 h-6 text-yellow-400" />
+              <h2 className="text-xl font-bold text-yellow-300 font-orbitron">
+                Team Player Registration Required
+              </h2>
+            </div>
+            <p className="text-gray-300 font-jetbrains mb-4">
+              Before you can access the tournament control center, you need to register players for each team.
+              This is a mandatory step for team tournaments.
+            </p>
+            <p className="text-yellow-200 font-jetbrains text-sm">
+              Please complete the registration process below to continue.
+            </p>
+          </div>
+          
+          <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" /></div>}>
+            <PlayerRegistration 
+              tournamentId={tournamentId!} 
+              onBack={handlePlayerRegistrationBack}
+              onNext={handlePlayerRegistrationNext}
+            />
+          </Suspense>
+        </div>
+      </div>
+    );
+  }
+
   const tabs = [
     { id: 'players' as ActiveTab, label: 'Players', icon: Users },
     { id: 'rounds' as ActiveTab, label: 'Rounds', icon: Trophy },
@@ -245,6 +332,16 @@ const TournamentControlCenter: React.FC = () => {
     };
 
     switch (activeTab) {
+      case 'registration':
+        return (
+          <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" /></div>}>
+            <PlayerRegistration 
+              tournamentId={tournamentId!} 
+              onBack={handleBack}
+              onNext={() => setActiveTab('rounds')}
+            />
+          </Suspense>
+        );
       case 'players':
         return (
           <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" /></div>}>

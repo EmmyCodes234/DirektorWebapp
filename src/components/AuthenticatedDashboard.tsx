@@ -329,8 +329,21 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
 
   const handleTournamentCreated = async (tournamentId: string) => {
     setShowTournamentModal(false);
-    // Navigate to the tournament management flow
-    navigate(`/tournament/${tournamentId}/dashboard`);
+    
+    // Check if this is a team tournament
+    const { data: tournament } = await supabase
+      .from('tournaments')
+      .select('team_mode')
+      .eq('id', tournamentId)
+      .single();
+      
+    if (tournament && tournament.team_mode) {
+      // For team tournaments, navigate to player registration first
+      navigate(`/tournament/${tournamentId}/dashboard`);
+    } else {
+      // For individual tournaments, go directly to the tournament dashboard
+      navigate(`/tournament/${tournamentId}/dashboard`);
+    }
   };
 
   const handleResumeTournament = (tournamentId: string, currentRound: number) => {
