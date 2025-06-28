@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { Player, Result, Pairing, TeamStanding, Team } from '../types/database';
 import { calculateTeamStandings } from '../utils/teamPairingAlgorithms';
 import TeamLogo from './TeamLogo';
+import PlayerLink from './PlayerLink';
 
 interface TeamStandingsProps {
   tournamentId: string;
@@ -415,13 +416,14 @@ const TeamStandings: React.FC<TeamStandingsProps> = ({
                     <td className="px-6 py-4">
                       <div className="flex flex-wrap gap-1">
                         {team.players.map((player) => (
-                          <button
+                          <PlayerLink
                             key={player.id}
-                            onClick={() => onPlayerClick?.(player.id!)}
+                            playerId={player.id!}
+                            playerName={player.name}
                             className="text-xs bg-gray-700/50 hover:bg-gray-600/50 text-gray-300 hover:text-white px-2 py-1 rounded transition-all duration-200"
                           >
                             {player.name}
-                          </button>
+                          </PlayerLink>
                         ))}
                       </div>
                     </td>
@@ -477,9 +479,10 @@ const TeamStandings: React.FC<TeamStandingsProps> = ({
                     </td>
                     
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <button
-                        onClick={() => onPlayerClick?.(player.id)}
-                        className="text-left hover:bg-blue-500/20 rounded-lg p-2 -m-2 transition-all duration-200 group"
+                      <PlayerLink 
+                        playerId={player.id} 
+                        playerName={player.name}
+                        className="text-left hover:bg-blue-500/20 rounded-lg p-2 -m-2 transition-all duration-200 group block"
                       >
                         <div className="text-sm font-medium text-white group-hover:text-blue-300 transition-colors duration-200">
                           {player.name}
@@ -487,7 +490,7 @@ const TeamStandings: React.FC<TeamStandingsProps> = ({
                         <div className="text-xs text-gray-400 font-jetbrains">
                           Rating: {player.rating}
                         </div>
-                      </button>
+                      </PlayerLink>
                     </td>
                     
                     <td className="px-6 py-4 whitespace-nowrap">

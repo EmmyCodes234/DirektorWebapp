@@ -7,6 +7,7 @@ import { ChecklistStep } from './UI/TournamentChecklist';
 import TournamentChecklist from './UI/TournamentChecklist';
 import FloatingActionButton from './UI/FloatingActionButton';
 import Sidebar from './Navigation/Sidebar';
+import TeamStandings from './TeamStandings';
 
 // Lazy-loaded components
 const RoundManager = React.lazy(() => import('./RoundManager'));
@@ -616,10 +617,14 @@ const TournamentControlCenter: React.FC = () => {
                 </button>
               </div>
               
-              <PlayerRoster 
-                tournamentId={tournamentId!} 
-                teamMode={tournament.team_mode}
-              />
+              {tournament.team_mode ? (
+                <TeamStandings tournamentId={tournamentId!} />
+              ) : (
+                <PlayerRoster 
+                  tournamentId={tournamentId!} 
+                  teamMode={tournament.team_mode}
+                />
+              )}
             </div>
           </Suspense>
         );

@@ -150,6 +150,23 @@ const TeamManager: React.FC<TeamManagerProps> = ({ tournamentId, onTeamsUpdated 
       await loadTeams();
       onTeamsUpdated?.();
 
+      // Show success toast
+      const toast = document.createElement('div');
+      toast.className = 'fixed top-4 right-4 z-50 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg font-jetbrains text-sm border border-green-500/50';
+      toast.innerHTML = `
+        <div class="flex items-center gap-2">
+          <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+          Team ${editingTeam ? 'updated' : 'created'} successfully
+        </div>
+      `;
+      document.body.appendChild(toast);
+      
+      setTimeout(() => {
+        if (document.body.contains(toast)) {
+          document.body.removeChild(toast);
+        }
+      }, 3000);
+
     } catch (err: any) {
       console.error('Error saving team:', err);
       setError(err.message || 'Failed to save team');
@@ -180,6 +197,23 @@ const TeamManager: React.FC<TeamManagerProps> = ({ tournamentId, onTeamsUpdated 
 
       await loadTeams();
       onTeamsUpdated?.();
+      
+      // Show success toast
+      const toast = document.createElement('div');
+      toast.className = 'fixed top-4 right-4 z-50 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg font-jetbrains text-sm border border-green-500/50';
+      toast.innerHTML = `
+        <div class="flex items-center gap-2">
+          <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+          Team deleted successfully
+        </div>
+      `;
+      document.body.appendChild(toast);
+      
+      setTimeout(() => {
+        if (document.body.contains(toast)) {
+          document.body.removeChild(toast);
+        }
+      }, 3000);
     } catch (err: any) {
       console.error('Error deleting team:', err);
       setError('Failed to delete team');
