@@ -1092,7 +1092,7 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
                   Tournament URL Preview
                 </h4>
                 <div className="text-white font-jetbrains mb-2 text-lg">
-                  https://direktorweb.com/tournaments/{generateTournamentSlug(formData.name)}
+                  https://direktorweb.site/tournaments/{generateTournamentSlug(formData.name)}
                 </div>
                 <div className="text-gray-300 font-jetbrains text-sm">
                   This is how your tournament URL will appear when shared. The URL is based on your tournament name.

@@ -56,7 +56,7 @@ const QRCodeModal: React.FC<QRCodeModalProps> = ({
       setIsGenerating(true);
       
       // Use slug if available, otherwise use ID
-      const tournamentUrl = `https://direktorweb.com/tournaments/${slug || tournamentId}`;
+      const tournamentUrl = `https://direktorweb.site/tournaments/${slug || tournamentId}`;
       
       // Generate QR code with custom styling
       const qrCodeDataUrl = await QRCodeLib.toDataURL(tournamentUrl, {
@@ -148,7 +148,7 @@ const QRCodeModal: React.FC<QRCodeModalProps> = ({
 
   const copyToClipboard = async () => {
     try {
-      const tournamentUrl = `https://direktorweb.com/tournaments/${tournamentSlug || tournamentId}`;
+      const tournamentUrl = `https://direktorweb.site/tournaments/${tournamentSlug || tournamentId}`;
       await navigator.clipboard.writeText(tournamentUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -207,7 +207,7 @@ const QRCodeModal: React.FC<QRCodeModalProps> = ({
 
   if (!isOpen) return null;
 
-  const tournamentUrl = `https://direktorweb.com/tournaments/${tournamentSlug || tournamentId}`;
+  const tournamentUrl = `https://direktorweb.site/tournaments/${tournamentSlug || tournamentId}`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

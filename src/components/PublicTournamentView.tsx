@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, RefreshCw, Users, Trophy, Calendar, MapPin, Download, ChevronDown, Search, X, BarChart3 } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Filter, Search, X, Download, ChevronDown, Eye, BarChart3 } from 'lucide-react';
 import ParticleBackground from './ParticleBackground';
 import PlayerDetailsModal from './PlayerDetailsModal';
 import TournamentHeader from './TournamentHeader';
@@ -40,11 +40,11 @@ const PublicTournamentView: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'players' | 'pairings' | 'standings'>('players');
   const [isMobile, setIsMobile] = useState(false);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [showPlayerModal, setShowPlayerModal] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const [passwordProtected, setPasswordProtected] = useState(false);
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState<string | null>(null);
@@ -874,13 +874,13 @@ const PublicTournamentView: React.FC = () => {
                                   </div>
                                 </td>
                                 
-                                <td className="px-4 py-4 text-center">
+                                <td className="px-4 py-4 text-center whitespace-nowrap">
                                   <span className="text-lg font-bold text-white font-mono">
                                     {pairing.result?.player1_score ?? '—'}
                                   </span>
                                 </td>
                                 
-                                <td className="px-4 py-4 text-center">
+                                <td className="px-4 py-4 text-center whitespace-nowrap">
                                   <span className="text-lg font-bold text-white font-mono">
                                     {pairing.result?.player2_score ?? '—'}
                                   </span>
@@ -994,10 +994,7 @@ const PublicTournamentView: React.FC = () => {
                               className="text-left hover:bg-blue-500/20 rounded-lg p-2 -m-2 transition-all duration-200 group block"
                             >
                               <div className="text-sm font-medium text-white group-hover:text-blue-300 transition-colors duration-200">
-                                {standing.name}
-                              </div>
-                              <div className="text-xs text-gray-400 font-jetbrains">
-                                Rating: {standing.rating}
+                                {standing.name} (#{standing.rank})
                               </div>
                             </PlayerLink>
                           </td>
