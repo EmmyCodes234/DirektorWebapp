@@ -1,8 +1,11 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, Trophy, BarChart3, Settings, Share2, QrCode, Eye, AlertTriangle, UserPlus } from 'lucide-react';
+import { ArrowLeft, Users, Trophy, BarChart3, Settings, Share2, QrCode, Eye, AlertTriangle, UserPlus, ChevronRight } from 'lucide-react';
 import { supabase, testSupabaseConnection, handleSupabaseError } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
+import { ChecklistStep } from './UI/TournamentChecklist';
+import TournamentChecklist from './UI/TournamentChecklist';
+import FloatingActionButton from './UI/FloatingActionButton';
 
 // Lazy-loaded components
 const RoundManager = React.lazy(() => import('./RoundManager'));
@@ -14,6 +17,7 @@ const Statistics = React.lazy(() => import('./Statistics/Statistics'));
 const PlayerRoster = React.lazy(() => import('./PlayerRoster'));
 const AddPlayerModal = React.lazy(() => import('./AddPlayerModal'));
 const PlayerRegistration = React.lazy(() => import('./PlayerRegistration'));
+const TournamentCompleteSummary = React.lazy(() => import('./UI/TournamentCompleteSummary'));
 
 interface Tournament {
   id: string;
@@ -26,7 +30,7 @@ interface Tournament {
   public_sharing_enabled: boolean;
 }
 
-type ActiveTab = 'players' | 'rounds' | 'scores' | 'standings' | 'admin' | 'statistics' | 'registration';
+type ActiveTab = 'players' | 'rounds' | 'scores' | 'standings' | 'admin' | 'statistics' | 'registration' | 'summary';
 
 const TournamentControlCenter: React.FC = () => {
   const { tournamentId } = useParams<{ tournamentId: string }>();
@@ -41,10 +45,19 @@ const TournamentControlCenter: React.FC = () => {
   const [showAddPlayerModal, setShowAddPlayerModal] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [hasRegisteredPlayers, setHasRegisteredPlayers] = useState(false);
+  const [tournamentWinner, setTournamentWinner] = useState<{name: string, team?: string} | null>(null);
+  const [checklistSteps, setChecklistSteps] = useState<ChecklistStep[]>([]);
 
   useEffect(() => {
     initializeComponent();
   }, [tournamentId]);
+
+  useEffect(() => {
+    // Update checklist steps when tournament data changes
+    if (tournament) {
+      updateChecklistSteps();
+    }
+  }, [tournament, hasRegisteredPlayers, activeTab]);
 
   const initializeComponent = async () => {
     try {
@@ -108,6 +121,11 @@ const TournamentControlCenter: React.FC = () => {
 
       setTournament(data);
       
+      // Check if tournament is completed and load winner
+      if (data.status === 'completed') {
+        await loadTournamentWinner();
+      }
+      
       // Check if there are registered players
       const { data: players, error: playersError } = await supabase
         .from('players')
@@ -127,6 +145,155 @@ const TournamentControlCenter: React.FC = () => {
       console.error('Error loading tournament:', err);
       setError(err.message || 'Failed to load tournament');
     }
+  };
+
+  const loadTournamentWinner = async () => {
+    try {
+      // Get the player with rank 1 from the final standings
+      const { data: results, error: resultsError } = await supabase
+        .from('results')
+        .select(`
+          *,
+          pairing:pairings!results_pairing_id_fkey(
+            player1_id,
+            player2_id,
+            round_number
+          )
+        `)
+        .eq('tournament_id', tournamentId);
+
+      if (resultsError) throw resultsError;
+
+      // Get all players
+      const { data: players, error: playersError } = await supabase
+        .from('players')
+        .select('*')
+        .eq('tournament_id', tournamentId);
+
+      if (playersError) throw playersError;
+
+      // Calculate standings
+      const playerStats = new Map();
+      
+      players.forEach(player => {
+        playerStats.set(player.id, {
+          id: player.id,
+          name: player.name,
+          team_name: player.team_name,
+          wins: 0,
+          losses: 0,
+          draws: 0,
+          points: 0,
+          spread: 0
+        });
+      });
+
+      // Process results
+      results.forEach(result => {
+        const pairing = result.pairing;
+        if (!pairing) return;
+
+        // Process player 1
+        const player1Stats = playerStats.get(pairing.player1_id);
+        if (player1Stats) {
+          const spread = result.player1_score - result.player2_score;
+          player1Stats.spread += spread;
+          
+          if (spread > 0) {
+            player1Stats.wins++;
+            player1Stats.points++;
+          } else if (spread < 0) {
+            player1Stats.losses++;
+          } else {
+            player1Stats.draws++;
+            player1Stats.points += 0.5;
+          }
+        }
+
+        // Process player 2
+        const player2Stats = playerStats.get(pairing.player2_id);
+        if (player2Stats) {
+          const spread = result.player2_score - result.player1_score;
+          player2Stats.spread += spread;
+          
+          if (spread > 0) {
+            player2Stats.wins++;
+            player2Stats.points++;
+          } else if (spread < 0) {
+            player2Stats.losses++;
+          } else {
+            player2Stats.draws++;
+            player2Stats.points += 0.5;
+          }
+        }
+      });
+
+      // Sort by points, then spread
+      const standings = Array.from(playerStats.values())
+        .sort((a, b) => {
+          if (a.points !== b.points) return b.points - a.points;
+          return b.spread - a.spread;
+        });
+
+      // Get winner
+      if (standings.length > 0) {
+        setTournamentWinner({
+          name: standings[0].name,
+          team: standings[0].team_name
+        });
+        
+        // If tournament is completed, show summary tab
+        if (tournament?.status === 'completed') {
+          setActiveTab('summary');
+        }
+      }
+    } catch (err) {
+      console.error('Error loading tournament winner:', err);
+    }
+  };
+
+  const updateChecklistSteps = () => {
+    if (!tournament) return;
+    
+    const steps: ChecklistStep[] = [
+      {
+        id: 'basic-info',
+        label: 'Basic Info',
+        completed: true, // Always completed since tournament exists
+        current: false,
+        disabled: false
+      },
+      {
+        id: 'register-players',
+        label: 'Register Players',
+        completed: hasRegisteredPlayers,
+        current: activeTab === 'registration' || activeTab === 'players',
+        disabled: false
+      },
+      {
+        id: 'pair-rounds',
+        label: 'Pair Rounds',
+        completed: tournament.current_round > 1,
+        current: activeTab === 'rounds',
+        disabled: !hasRegisteredPlayers
+      },
+      {
+        id: 'enter-scores',
+        label: 'Enter Scores',
+        completed: tournament.status === 'completed',
+        current: activeTab === 'scores',
+        disabled: !hasRegisteredPlayers || tournament.current_round <= 1
+      },
+      {
+        id: 'view-standings',
+        label: 'View Standings',
+        completed: tournament.status === 'completed',
+        current: activeTab === 'standings',
+        disabled: !hasRegisteredPlayers || tournament.current_round <= 1
+      }
+    ];
+    
+    setChecklistSteps(steps);
   };
 
   const handleBack = () => {
@@ -163,6 +330,26 @@ const TournamentControlCenter: React.FC = () => {
     await initializeComponent();
   };
 
+  const handleChecklistStepClick = (stepId: string) => {
+    switch (stepId) {
+      case 'basic-info':
+        setActiveTab('admin');
+        break;
+      case 'register-players':
+        setActiveTab(tournament?.team_mode && !hasRegisteredPlayers ? 'registration' : 'players');
+        break;
+      case 'pair-rounds':
+        setActiveTab('rounds');
+        break;
+      case 'enter-scores':
+        setActiveTab('scores');
+        break;
+      case 'view-standings':
+        setActiveTab('standings');
+        break;
+    }
+  };
+
   // Navigation handlers for PlayerRegistration
   const handlePlayerRegistrationBack = () => {
     navigate('/dashboard');
@@ -171,6 +358,57 @@ const TournamentControlCenter: React.FC = () => {
   const handlePlayerRegistrationNext = () => {
     setHasRegisteredPlayers(true);
     setActiveTab('rounds');
+  };
+
+  const handleExportTou = () => {
+    // This will be implemented in the AdminPanel component
+  };
+
+  const handleViewStats = () => {
+    setActiveTab('statistics');
+  };
+
+  const handleCreateNew = () => {
+    navigate('/new-tournament');
+  };
+
+  // FAB actions based on current tab
+  const getFabActions = () => {
+    const actions = [];
+    
+    if (activeTab === 'players') {
+      actions.push({
+        label: 'Add Player',
+        icon: UserPlus,
+        onClick: handleAddPlayer
+      });
+    }
+    
+    if (activeTab === 'rounds' && hasRegisteredPlayers) {
+      actions.push({
+        label: 'Enter Scores',
+        icon: BarChart3,
+        onClick: () => setActiveTab('scores')
+      });
+    }
+    
+    if (activeTab === 'scores') {
+      actions.push({
+        label: 'View Standings',
+        icon: Trophy,
+        onClick: () => setActiveTab('standings')
+      });
+    }
+    
+    if (tournament?.status === 'completed') {
+      actions.push({
+        label: 'Export .TOU File',
+        icon: Trophy,
+        onClick: handleExportTou
+      });
+    }
+    
+    return actions;
   };
 
   if (loading) {
@@ -283,6 +521,15 @@ const TournamentControlCenter: React.FC = () => {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Tournament Checklist */}
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <TournamentChecklist 
+            steps={checklistSteps}
+            onStepClick={handleChecklistStepClick}
+            orientation="horizontal"
+          />
         </div>
 
         {/* Content */}
@@ -414,6 +661,20 @@ const TournamentControlCenter: React.FC = () => {
             <AdminPanel {...commonProps} />
           </Suspense>
         );
+      case 'summary':
+        return (
+          <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" /></div>}>
+            <TournamentCompleteSummary 
+              tournamentId={tournamentId!}
+              tournamentName={tournament.name}
+              winnerName={tournamentWinner?.name || 'Unknown'}
+              winnerTeam={tournamentWinner?.team}
+              onExportTou={handleExportTou}
+              onViewStats={handleViewStats}
+              onCreateNew={handleCreateNew}
+            />
+          </Suspense>
+        );
       default:
         return <div className="text-center py-12 text-gray-400">Select a tab to get started</div>;
     }
@@ -467,6 +728,15 @@ const TournamentControlCenter: React.FC = () => {
         </div>
       </div>
 
+      {/* Tournament Checklist */}
+      <div className="max-w-7xl mx-auto px-4 py-4">
+        <TournamentChecklist 
+          steps={checklistSteps}
+          onStepClick={handleChecklistStepClick}
+          orientation="horizontal"
+        />
+      </div>
+
       {/* Navigation Tabs */}
       <div className="bg-gray-900/30 backdrop-blur-lg border-b border-gray-800/50">
         <div className="max-w-7xl mx-auto px-4">
@@ -474,6 +744,9 @@ const TournamentControlCenter: React.FC = () => {
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
+              
+              // Skip the summary tab in the navigation
+              if (tab.id === 'summary') return null;
               
               return (
                 <button
@@ -523,6 +796,9 @@ const TournamentControlCenter: React.FC = () => {
           />
         </Suspense>
       )}
+
+      {/* Floating Action Button */}
+      <FloatingActionButton actions={getFabActions()} />
     </div>
   );
 };

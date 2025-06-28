@@ -1,13 +1,11 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut } from 'lucide-react';
-import LayoutWrapper from './UserDashboard/LayoutWrapper';
-import TournamentManagerCard from './UserDashboard/TournamentManagerCard';
-import ProfileCard from './UserDashboard/ProfileCard';
-import SettingsButton from './UserDashboard/SettingsButton';
+import { Trophy, BarChart3, Users, Plus } from 'lucide-react';
+import DashboardLayout from './UI/DashboardLayout';
 import TournamentSetupModal from './TournamentSetupModal';
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
+import { useOnboarding } from '../hooks/useOnboarding';
 
 // Lazy-loaded components
 const TournamentResume = React.lazy(() => import('./TournamentResume'));
@@ -30,20 +28,12 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
   const [activeSection, setActiveSection] = useState<'dashboard' | 'profile' | 'tournaments' | 'history' | 'new-tournament' | 'resume-tournament'>('dashboard');
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [showTournamentModal, setShowTournamentModal] = useState(false);
-  const [showProfileModal, setShowProfileModal] = useState(false);
   const [hasExistingTournaments, setHasExistingTournaments] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
-
-  // Profile form state
-  const [formData, setFormData] = useState({
-    username: '',
-    nickname: ''
-  });
+  
+  const { hasCompletedOnboarding, resetOnboarding } = useOnboarding();
 
   useEffect(() => {
     loadUserProfile();
@@ -114,10 +104,6 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
       if (profileData) {
         // Profile exists, use it
         setProfile(profileData);
-        setFormData({
-          username: profileData.username || user.email || '',
-          nickname: profileData.nickname || ''
-        });
       } else {
         // Profile doesn't exist, create it using upsert to handle race conditions
         const newProfile = {
@@ -142,10 +128,6 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
         }
 
         setProfile(createdProfile);
-        setFormData({
-          username: createdProfile.username || '',
-          nickname: createdProfile.nickname || ''
-        });
       }
     } catch (err: any) {
       console.error('Error loading user profile:', err);
@@ -160,153 +142,6 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
       }
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleInputChange = (field: keyof typeof formData, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleAvatarUpload = async (file: File) => {
-    if (!file) return;
-
-    setIsUploadingAvatar(true);
-    setError(null);
-
-    try {
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        throw new Error('Please select an image file');
-      }
-
-      // Validate file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        throw new Error('File size must be less than 5MB');
-      }
-
-      // Generate unique filename
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-
-      // Upload to Supabase Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('user-avatars')
-        .upload(fileName, file);
-
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from('user-avatars')
-        .getPublicUrl(fileName);
-
-      // Update profile with new avatar URL
-      const { error: updateError } = await supabase
-        .from('user_profiles')
-        .update({ avatar_url: urlData.publicUrl })
-        .eq('id', user.id);
-
-      if (updateError) throw updateError;
-
-      // Update local state
-      setProfile(prev => prev ? { ...prev, avatar_url: urlData.publicUrl } : null);
-      setSuccessMessage('Avatar updated successfully!');
-      
-      setTimeout(() => setSuccessMessage(null), 3000);
-      
-    } catch (err: any) {
-      console.error('Error uploading avatar:', err);
-      
-      if (err.message?.includes('Failed to fetch')) {
-        setError('Unable to upload avatar. Please check your internet connection and try again.');
-      } else {
-        setError(err.message || 'Failed to upload avatar');
-      }
-    } finally {
-      setIsUploadingAvatar(false);
-    }
-  };
-
-  const triggerAvatarUpload = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) {
-        handleAvatarUpload(file);
-      }
-    };
-    input.click();
-  };
-
-  const handleSaveProfile = async () => {
-    if (!formData.username.trim()) {
-      setError('Username is required');
-      return;
-    }
-
-    setIsSaving(true);
-    setError(null);
-
-    try {
-      const { error: updateError } = await supabase
-        .from('user_profiles')
-        .update({
-          username: formData.username.trim(),
-          nickname: formData.nickname.trim() || null
-        })
-        .eq('id', user.id);
-
-      if (updateError) throw updateError;
-
-      // Reload profile
-      await loadUserProfile();
-      setSuccessMessage('Profile updated successfully!');
-      setShowProfileModal(false);
-      
-      setTimeout(() => setSuccessMessage(null), 3000);
-      
-    } catch (err: any) {
-      console.error('Error updating profile:', err);
-      
-      if (err.message?.includes('Failed to fetch')) {
-        setError('Unable to save profile. Please check your internet connection and try again.');
-      } else {
-        setError(`Failed to update profile: ${err.message || 'Unknown error occurred'}`);
-      }
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleSignOut = async () => {
-    try {
-      await supabase.auth.signOut();
-      
-      // Show success toast
-      const toast = document.createElement('div');
-      toast.className = 'fixed top-4 right-4 z-50 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg font-jetbrains text-sm border border-green-500/50';
-      toast.innerHTML = `
-        <div class="flex items-center gap-2">
-          <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-          You've been signed out. See you next time!
-        </div>
-      `;
-      document.body.appendChild(toast);
-      
-      setTimeout(() => {
-        if (document.body.contains(toast)) {
-          document.body.removeChild(toast);
-        }
-      }, 3000);
-      
-      // Redirect to landing page
-      navigate('/');
-    } catch (err) {
-      console.error('Error signing out:', err);
-      // Still redirect even if there's an error
-      navigate('/');
     }
   };
 
@@ -351,19 +186,29 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
     navigate(`/tournament/${tournamentId}/dashboard`);
   };
 
-  const openProfileModal = () => {
-    setShowProfileModal(true);
-    setError(null);
-    setFormData({
-      username: profile?.username || user.email || '',
-      nickname: profile?.nickname || ''
-    });
+  const handleRetryConnection = async () => {
+    setConnectionError(null);
+    await checkExistingTournaments();
   };
 
-  const closeProfileModal = () => {
-    setShowProfileModal(false);
-    setError(null);
-  };
+  // FAB actions
+  const fabActions = [
+    {
+      label: 'New Tournament',
+      icon: Trophy,
+      onClick: handleNewTournament
+    },
+    {
+      label: 'View Tournaments',
+      icon: BarChart3,
+      onClick: handleViewTournaments
+    },
+    {
+      label: 'Player Leaderboard',
+      icon: Users,
+      onClick: () => navigate('/leaderboard/players')
+    }
+  ];
 
   if (isLoading) {
     return (
@@ -373,24 +218,13 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
     );
   }
 
-  // Header actions for sign out button
-  const headerActions = (
-    <button
-      onClick={handleSignOut}
-      className="flex items-center gap-2 px-4 py-2 bg-gray-800/80 backdrop-blur-lg text-gray-300 hover:text-white rounded-lg border border-gray-700/50 hover:border-gray-600/50 transition-all duration-200"
-    >
-      <LogOut size={16} />
-      Sign Out
-    </button>
-  );
-
   // Render dashboard content
   if (activeSection === 'dashboard') {
     return (
-      <LayoutWrapper 
-        title="WELCOME" 
+      <DashboardLayout 
+        title="Welcome Back" 
         subtitle={profile?.username || user.email}
-        headerActions={headerActions}
+        fabActions={fabActions}
       >
         {/* Connection Error Message */}
         {connectionError && (
@@ -401,10 +235,7 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
               </div>
               <p>{connectionError}</p>
               <button
-                onClick={() => {
-                  setConnectionError(null);
-                  checkExistingTournaments();
-                }}
+                onClick={handleRetryConnection}
                 className="mt-2 px-3 py-1 bg-yellow-600/20 border border-yellow-500/50 rounded text-yellow-200 hover:bg-yellow-600/30 transition-colors duration-200"
               >
                 Retry Connection
@@ -413,7 +244,7 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
           </div>
         )}
 
-        {/* Error/Success Messages */}
+        {/* Error Message */}
         {error && (
           <div className="max-w-4xl mx-auto w-full mb-8">
             <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-4 text-red-300 font-jetbrains text-sm">
@@ -422,32 +253,64 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
           </div>
         )}
 
-        {successMessage && (
-          <div className="max-w-4xl mx-auto w-full mb-8">
-            <div className="bg-green-900/30 border border-green-500/50 rounded-lg p-4 text-green-300 font-jetbrains text-sm">
-              {successMessage}
+        {/* Dashboard Cards */}
+        <div className="fade-up fade-up-delay-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Create Tournament Card */}
+          <div 
+            className="bg-gradient-to-br from-blue-900/30 to-purple-900/30 border border-blue-500/30 rounded-xl p-6 hover:border-blue-500/50 transition-all duration-300 cursor-pointer"
+            onClick={handleNewTournament}
+            data-onboarding="create-tournament"
+          >
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
+                <Plus className="w-6 h-6 text-white" />
+              </div>
+              <h3 className="text-xl font-bold text-white font-orbitron">Create Tournament</h3>
+            </div>
+            <p className="text-gray-300 font-jetbrains mb-4">
+              Start a new tournament with customizable settings for teams, divisions, and pairing systems.
+            </p>
+            <div className="text-blue-400 font-jetbrains text-sm">
+              Click to get started →
             </div>
           </div>
-        )}
-
-        {/* Dashboard Cards */}
-        <div className="fade-up fade-up-delay-4 max-w-4xl mx-auto w-full mb-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Tournament Management Card */}
-            <TournamentManagerCard
-              onNewTournament={handleNewTournament}
-              onViewTournaments={handleViewTournaments}
-              onTournamentHistory={handleTournamentHistory}
-            />
-
-            {/* Profile Card */}
-            <div className="relative">
-              <ProfileCard
-                user={user}
-                profile={profile}
-                onEditProfile={openProfileModal}
-              />
-              <SettingsButton onClick={openProfileModal} />
+          
+          {/* My Tournaments Card */}
+          <div 
+            className="bg-gradient-to-br from-green-900/30 to-cyan-900/30 border border-green-500/30 rounded-xl p-6 hover:border-green-500/50 transition-all duration-300 cursor-pointer"
+            onClick={handleViewTournaments}
+            data-onboarding="my-tournaments"
+          >
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-cyan-500 rounded-lg flex items-center justify-center">
+                <Trophy className="w-6 h-6 text-white" />
+              </div>
+              <h3 className="text-xl font-bold text-white font-orbitron">My Tournaments</h3>
+            </div>
+            <p className="text-gray-300 font-jetbrains mb-4">
+              Access and manage your existing tournaments, view results, and continue where you left off.
+            </p>
+            <div className="text-green-400 font-jetbrains text-sm">
+              {hasExistingTournaments ? 'Resume your tournaments →' : 'Create your first tournament →'}
+            </div>
+          </div>
+          
+          {/* Player Leaderboard Card */}
+          <div 
+            className="bg-gradient-to-br from-yellow-900/30 to-orange-900/30 border border-yellow-500/30 rounded-xl p-6 hover:border-yellow-500/50 transition-all duration-300 cursor-pointer"
+            onClick={() => navigate('/leaderboard/players')}
+          >
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-12 h-12 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-lg flex items-center justify-center">
+                <Users className="w-6 h-6 text-white" />
+              </div>
+              <h3 className="text-xl font-bold text-white font-orbitron">Player Leaderboard</h3>
+            </div>
+            <p className="text-gray-300 font-jetbrains mb-4">
+              View top players across all tournaments, ranked by performance, wins, and badges earned.
+            </p>
+            <div className="text-yellow-400 font-jetbrains text-sm">
+              Explore player rankings →
             </div>
           </div>
         </div>
@@ -458,19 +321,26 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
           onClose={() => setShowTournamentModal(false)}
           onSuccess={handleTournamentCreated}
         />
-      </LayoutWrapper>
+        
+        {/* Reset Onboarding Button (for testing) */}
+        <div className="mt-8 text-center">
+          <button
+            onClick={resetOnboarding}
+            className="text-gray-500 hover:text-gray-400 text-xs font-jetbrains"
+          >
+            Reset Onboarding
+          </button>
+        </div>
+      </DashboardLayout>
     );
   }
 
   // Resume Tournament View
   if (activeSection === 'resume-tournament') {
     return (
-      <LayoutWrapper 
-        title="YOUR TOURNAMENTS" 
+      <DashboardLayout 
+        title="Your Tournaments" 
         subtitle="Resume or manage your tournaments"
-        showBackButton={true}
-        onBack={() => setActiveSection('dashboard')}
-        headerActions={headerActions}
       >
         <Suspense fallback={
           <div className="flex items-center justify-center py-12">
@@ -482,25 +352,22 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
             onResumeTournament={handleResumeTournament}
           />
         </Suspense>
-      </LayoutWrapper>
+      </DashboardLayout>
     );
   }
 
   // Fallback for other sections
   return (
-    <LayoutWrapper 
-      title="DASHBOARD" 
+    <DashboardLayout 
+      title="Dashboard" 
       subtitle="Your tournament management hub"
-      showBackButton={true}
-      onBack={() => setActiveSection('dashboard')}
-      headerActions={headerActions}
     >
       <div className="text-center py-12">
         <p className="text-gray-400 font-jetbrains">
           This section is under development
         </p>
       </div>
-    </LayoutWrapper>
+    </DashboardLayout>
   );
 };
 
