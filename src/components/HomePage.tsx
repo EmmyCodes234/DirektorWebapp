@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogOut, UserPlus, Trophy, Zap, Users, Target, Star, ChevronRight } from 'lucide-react';
 import ParticleBackground from './ParticleBackground';
-import TopDirectorsSpotlight from './TopDirectorsSpotlight';
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 
@@ -26,6 +25,8 @@ const HomePage: React.FC = () => {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setUser(session.user);
+        // Redirect to dashboard if already logged in
+        navigate('/dashboard');
       } else {
         setUser(null);
       }
@@ -205,35 +206,6 @@ const HomePage: React.FC = () => {
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform -skew-x-12 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
               <UserPlus size={24} className="relative z-10" />
               <span className="relative z-10">Sign Up</span>
-            </button>
-          </div>
-        </div>
-        
-        {/* Top Directors Spotlight */}
-        <div className="fade-up fade-up-delay-4 w-full max-w-6xl mx-auto mt-24 mb-16">
-          <div className="text-center mb-10">
-            <h2 
-              className="text-4xl font-bold text-white font-orbitron mb-4"
-              style={{
-                textShadow: '0 0 20px rgba(59, 130, 246, 0.5), 0 0 40px rgba(59, 130, 246, 0.3)'
-              }}
-            >
-              Top Tournament Directors
-            </h2>
-            <p className="text-xl text-gray-300 font-jetbrains">
-              The best minds behind successful Scrabble tournaments
-            </p>
-          </div>
-          
-          <TopDirectorsSpotlight />
-          
-          <div className="text-center mt-8">
-            <button
-              onClick={handleViewAllDirectors}
-              className="group inline-flex items-center gap-2 px-6 py-3 bg-purple-600/20 border border-purple-500/50 text-purple-400 hover:bg-purple-600/30 hover:text-white rounded-lg font-jetbrains font-medium transition-all duration-200 hover:scale-105"
-            >
-              <span>View All Directors</span>
-              <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform duration-200" />
             </button>
           </div>
         </div>
