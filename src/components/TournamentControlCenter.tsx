@@ -130,6 +130,15 @@ const TournamentControlCenter: React.FC = () => {
     await initializeComponent();
   };
 
+  // Navigation handlers for PlayerRegistration
+  const handlePlayerRegistrationBack = () => {
+    navigate('/dashboard');
+  };
+
+  const handlePlayerRegistrationNext = () => {
+    setActiveTab('rounds');
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
@@ -233,7 +242,11 @@ const TournamentControlCenter: React.FC = () => {
       case 'players':
         return (
           <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" /></div>}>
-            <PlayerRegistration {...commonProps} />
+            <PlayerRegistration 
+              {...commonProps} 
+              onBack={handlePlayerRegistrationBack}
+              onNext={handlePlayerRegistrationNext}
+            />
           </Suspense>
         );
       case 'rounds':
