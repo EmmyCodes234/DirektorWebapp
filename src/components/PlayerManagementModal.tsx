@@ -27,6 +27,7 @@ const PlayerManagementModal: React.FC<PlayerManagementModalProps> = ({
   const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [newPlayerInput, setNewPlayerInput] = useState('');
+  const [pauseReason, setPauseReason] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -95,7 +96,8 @@ const PlayerManagementModal: React.FC<PlayerManagementModalProps> = ({
         name: player.name,
         rating: player.rating,
         tournament_id: tournamentId,
-        team_name: teamMode ? player.team_name : undefined
+        team_name: teamMode ? player.team_name : undefined,
+        status: 'active'
       }));
 
       // Insert players
@@ -171,10 +173,25 @@ const PlayerManagementModal: React.FC<PlayerManagementModalProps> = ({
       setIsSaving(true);
       setError(null);
 
-      // In a real implementation, you would update a 'status' field on the player
-      // For now, we'll just show a success message
+      // Update player status to paused
+      const { error: updateError } = await supabase
+        .from('players')
+        .update({
+          status: 'paused',
+          paused_at: new Date().toISOString(),
+          paused_reason: pauseReason || null
+        })
+        .in('id', selectedPlayers);
+
+      if (updateError) throw updateError;
+
+      // Show success message
       setSuccess(`Successfully paused ${selectedPlayers.length} player${selectedPlayers.length !== 1 ? 's' : ''}`);
       setSelectedPlayers([]);
+      setPauseReason('');
+      
+      // Reload players
+      await loadData();
       
       // Call completion callback
       setTimeout(() => {
@@ -196,10 +213,16 @@ const PlayerManagementModal: React.FC<PlayerManagementModalProps> = ({
     );
   };
 
-  const filteredPlayers = players.filter(player => 
-    player.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (player.team_name && player.team_name.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const filteredPlayers = players.filter(player => {
+    // For pause mode, only show active players
+    if (mode === 'pause' && player.status === 'paused') {
+      return false;
+    }
+    
+    // For all modes, apply search filter
+    return player.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (player.team_name && player.team_name.toLowerCase().includes(searchQuery.toLowerCase()));
+  });
 
   const getModalTitle = () => {
     switch (mode) {
@@ -390,7 +413,14 @@ const PlayerManagementModal: React.FC<PlayerManagementModalProps> = ({
                           </div>
                           
                           <div>
-                            <div className="text-white font-medium">{player.name}</div>
+                            <div className="text-white font-medium">
+                              {player.name}
+                              {player.status === 'paused' && (
+                                <span className="ml-2 px-2 py-0.5 bg-yellow-500/20 text-yellow-300 text-xs rounded-full">
+                                  Paused
+                                </span>
+                              )}
+                            </div>
                             <div className="text-sm text-gray-400 font-jetbrains">Rating: {player.rating}</div>
                           </div>
                         </div>
@@ -415,6 +445,21 @@ const PlayerManagementModal: React.FC<PlayerManagementModalProps> = ({
                   </div>
                 )}
               </div>
+              
+              {/* Pause Reason Input (only for pause mode) */}
+              {mode === 'pause' && (
+                <div className="mt-4">
+                  <label className="block text-white text-sm font-medium mb-2 font-jetbrains">
+                    Reason for Pausing (Optional):
+                  </label>
+                  <textarea
+                    value={pauseReason}
+                    onChange={(e) => setPauseReason(e.target.value)}
+                    placeholder="Enter reason for pausing player participation..."
+                    className="w-full h-24 bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-2 text-white font-jetbrains text-sm resize-none focus:border-blue-500 focus:outline-none transition-colors duration-300"
+                  />
+                </div>
+              )}
               
               <div className="mt-4 flex items-center justify-between">
                 <div className="text-sm text-gray-400 font-jetbrains">
@@ -450,6 +495,19 @@ const PlayerManagementModal: React.FC<PlayerManagementModalProps> = ({
                 <div>
                   <p className="font-medium mb-1">Warning: This action cannot be undone</p>
                   <p>Removing players will delete all their data including game results. This may affect tournament standings and pairings.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Info for Pause */}
+          {mode === 'pause' && (
+            <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-4 text-yellow-300 font-jetbrains text-sm">
+              <div className="flex items-start gap-2">
+                <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium mb-1">Pausing Player Participation</p>
+                  <p>Paused players will not be included in future pairings but their previous results will be preserved. You can unpause players later if needed.</p>
                 </div>
               </div>
             </div>

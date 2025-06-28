@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, ArrowUp, ArrowDown, X, Download, User, Users, UserCheck } from 'lucide-react';
+import { Search, Filter, ArrowUp, ArrowDown, X, Download, User, Users, UserCheck, UserX } from 'lucide-react';
 import { supabase, handleSupabaseError, retrySupabaseOperation } from '../lib/supabase';
 import { Player, Division, Team } from '../types/database';
 import TeamLogo from './TeamLogo';
@@ -25,7 +25,8 @@ const PlayerRoster: React.FC<PlayerRosterProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDivision, setSelectedDivision] = useState<string>('all');
   const [selectedTeam, setSelectedTeam] = useState<string>('all');
-  const [sortField, setSortField] = useState<'name' | 'rating'>('rating');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [sortField, setSortField] = useState<'name' | 'rating' | 'status'>('rating');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState<string | null>(null);
 
@@ -92,7 +93,7 @@ const PlayerRoster: React.FC<PlayerRosterProps> = ({
     }
   };
 
-  const handleSort = (field: 'name' | 'rating') => {
+  const handleSort = (field: 'name' | 'rating' | 'status') => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
@@ -151,13 +152,58 @@ const PlayerRoster: React.FC<PlayerRosterProps> = ({
     }
   };
 
+  const handleTogglePlayerStatus = async (player: Player) => {
+    try {
+      const newStatus = player.status === 'paused' ? 'active' : 'paused';
+      
+      const { error } = await supabase
+        .from('players')
+        .update({
+          status: newStatus,
+          paused_at: newStatus === 'paused' ? new Date().toISOString() : null,
+          paused_reason: newStatus === 'paused' ? 'Manually paused' : null
+        })
+        .eq('id', player.id);
+        
+      if (error) throw error;
+      
+      // Update local state
+      setPlayers(players.map(p => 
+        p.id === player.id 
+          ? { ...p, status: newStatus, paused_at: newStatus === 'paused' ? new Date().toISOString() : null } 
+          : p
+      ));
+      
+      // Show success toast
+      const toast = document.createElement('div');
+      toast.className = 'fixed top-4 right-4 z-50 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg font-jetbrains text-sm border border-green-500/50';
+      toast.innerHTML = `
+        <div class="flex items-center gap-2">
+          <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+          Player ${newStatus === 'paused' ? 'paused' : 'activated'} successfully
+        </div>
+      `;
+      document.body.appendChild(toast);
+      
+      setTimeout(() => {
+        if (document.body.contains(toast)) {
+          document.body.removeChild(toast);
+        }
+      }, 3000);
+    } catch (err: any) {
+      console.error('Error updating player status:', err);
+      setError(handleSupabaseError(err, 'updating player status'));
+    }
+  };
+
   const exportPlayersCSV = () => {
-    const headers = ['Name', 'Rating', 'Division', 'Team'];
+    const headers = ['Name', 'Rating', 'Division', 'Team', 'Status'];
     const rows = filteredPlayers.map(player => [
       player.name,
       player.rating.toString(),
       getDivisionName(player),
-      player.team_name || ''
+      player.team_name || '',
+      player.status || 'active'
     ]);
 
     const csvContent = [headers, ...rows]
@@ -179,6 +225,29 @@ const PlayerRoster: React.FC<PlayerRosterProps> = ({
     return divisions.length > 0 ? divisions[0].name : 'Main Division';
   };
 
+  const getStatusBadge = (status?: string) => {
+    switch (status) {
+      case 'paused':
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100/10 text-yellow-300 border border-yellow-500/30">
+            Paused
+          </span>
+        );
+      case 'withdrawn':
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100/10 text-red-300 border border-red-500/30">
+            Withdrawn
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100/10 text-green-300 border border-green-500/30">
+            Active
+          </span>
+        );
+    }
+  };
+
   // Apply filters and sorting
   const filteredPlayers = players
     .filter(player => {
@@ -191,13 +260,23 @@ const PlayerRoster: React.FC<PlayerRosterProps> = ({
       // Team filter
       const matchesTeam = selectedTeam === 'all' || player.team_name === selectedTeam;
       
-      return matchesSearch && matchesDivision && matchesTeam;
+      // Status filter
+      const matchesStatus = selectedStatus === 'all' || player.status === selectedStatus || 
+                           (selectedStatus === 'active' && !player.status);
+      
+      return matchesSearch && matchesDivision && matchesTeam && matchesStatus;
     })
     .sort((a, b) => {
       if (sortField === 'name') {
         return sortDirection === 'asc' 
           ? a.name.localeCompare(b.name)
           : b.name.localeCompare(a.name);
+      } else if (sortField === 'status') {
+        const statusA = a.status || 'active';
+        const statusB = b.status || 'active';
+        return sortDirection === 'asc'
+          ? statusA.localeCompare(statusB)
+          : statusB.localeCompare(statusA);
       } else {
         return sortDirection === 'asc'
           ? a.rating - b.rating
@@ -278,6 +357,21 @@ const PlayerRoster: React.FC<PlayerRosterProps> = ({
               </select>
             </div>
           )}
+          
+          {/* Status Filter */}
+          <div className="flex items-center gap-2">
+            <UserX className="h-4 w-4 text-gray-400" />
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="bg-gray-800/50 border border-gray-600 rounded-lg px-3 py-2 text-white font-jetbrains focus:border-blue-500 focus:outline-none text-sm"
+            >
+              <option value="all">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="paused">Paused</option>
+              <option value="withdrawn">Withdrawn</option>
+            </select>
+          </div>
 
           {/* Export Button */}
           <button
@@ -339,6 +433,19 @@ const PlayerRoster: React.FC<PlayerRosterProps> = ({
                     Team
                   </th>
                 )}
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider font-jetbrains">
+                  <button
+                    onClick={() => handleSort('status')}
+                    className="flex items-center gap-1 hover:text-white transition-colors duration-200"
+                  >
+                    Status
+                    {sortField === 'status' && (
+                      sortDirection === 'asc' ? 
+                        <ArrowUp className="h-3 w-3" /> : 
+                        <ArrowDown className="h-3 w-3" />
+                    )}
+                  </button>
+                </th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider font-jetbrains">
                   Actions
                 </th>
@@ -382,6 +489,9 @@ const PlayerRoster: React.FC<PlayerRosterProps> = ({
                       )}
                     </td>
                   )}
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    {getStatusBadge(player.status)}
+                  </td>
                   <td className="px-4 py-4 whitespace-nowrap text-center">
                     <div className="flex items-center justify-center gap-2">
                       {onEditPlayer && (
@@ -392,6 +502,16 @@ const PlayerRoster: React.FC<PlayerRosterProps> = ({
                           Edit
                         </button>
                       )}
+                      <button
+                        onClick={() => handleTogglePlayerStatus(player)}
+                        className={`px-2 py-1 rounded text-xs font-jetbrains transition-all duration-200 ${
+                          player.status === 'paused'
+                            ? 'bg-green-600/20 border border-green-500/50 text-green-400 hover:bg-green-600/30 hover:text-white'
+                            : 'bg-yellow-600/20 border border-yellow-500/50 text-yellow-400 hover:bg-yellow-600/30 hover:text-white'
+                        }`}
+                      >
+                        {player.status === 'paused' ? 'Activate' : 'Pause'}
+                      </button>
                       {onDeletePlayer && (
                         <button
                           onClick={() => handleDeleteConfirm(player.id!)}
@@ -414,7 +534,7 @@ const PlayerRoster: React.FC<PlayerRosterProps> = ({
 
         {filteredPlayers.length === 0 && (
           <div className="text-center py-12 text-gray-400 font-jetbrains">
-            {searchQuery || selectedDivision !== 'all' || selectedTeam !== 'all'
+            {searchQuery || selectedDivision !== 'all' || selectedTeam !== 'all' || selectedStatus !== 'all'
               ? 'No players match your search criteria'
               : 'No players registered yet'}
           </div>
@@ -422,10 +542,24 @@ const PlayerRoster: React.FC<PlayerRosterProps> = ({
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4 text-center">
           <div className="text-2xl font-bold text-white font-orbitron">{players.length}</div>
           <div className="text-gray-400 text-sm">Total Players</div>
+        </div>
+        
+        <div className="bg-gray-900/50 border border-green-500/30 rounded-lg p-4 text-center">
+          <div className="text-2xl font-bold text-green-400 font-orbitron">
+            {players.filter(p => !p.status || p.status === 'active').length}
+          </div>
+          <div className="text-gray-400 text-sm">Active Players</div>
+        </div>
+        
+        <div className="bg-gray-900/50 border border-yellow-500/30 rounded-lg p-4 text-center">
+          <div className="text-2xl font-bold text-yellow-400 font-orbitron">
+            {players.filter(p => p.status === 'paused').length}
+          </div>
+          <div className="text-gray-400 text-sm">Paused Players</div>
         </div>
         
         <div className="bg-gray-900/50 border border-blue-500/30 rounded-lg p-4 text-center">
@@ -434,15 +568,6 @@ const PlayerRoster: React.FC<PlayerRosterProps> = ({
           </div>
           <div className="text-gray-400 text-sm">Average Rating</div>
         </div>
-        
-        {teamMode && (
-          <div className="bg-gray-900/50 border border-purple-500/30 rounded-lg p-4 text-center">
-            <div className="text-2xl font-bold text-purple-400 font-orbitron">
-              {new Set(players.map(p => p.team_name).filter(Boolean)).size}
-            </div>
-            <div className="text-gray-400 text-sm">Teams</div>
-          </div>
-        )}
       </div>
     </div>
   );

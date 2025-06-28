@@ -8,8 +8,11 @@ export function generatePairings(
   currentRound: number = 1,
   totalRounds: number = 7
 ): PairingDisplay[] {
+  // Filter out paused players
+  const activePlayers = players.filter(p => !p.status || p.status === 'active');
+  
   // Calculate current standings and Gibsonization status
-  const playersWithGibsonization = calculateGibsonization(players, currentRound, totalRounds);
+  const playersWithGibsonization = calculateGibsonization(activePlayers, currentRound, totalRounds);
   
   // Sort players by current standings (points, then spread, then rating)
   const sortedPlayers = [...playersWithGibsonization].sort((a, b) => {
