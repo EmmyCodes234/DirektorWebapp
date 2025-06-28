@@ -36,7 +36,7 @@ export function useLogicBlock(featureName: string) {
           .from('logic_blocks')
           .select('logic_code')
           .eq('feature_name', featureName)
-          .single();
+          .maybeSingle();
 
         if (error) {
           throw error;
@@ -50,6 +50,9 @@ export function useLogicBlock(featureName: string) {
           };
           
           setLogicCode(data.logic_code);
+        } else {
+          // No logic block found for this feature
+          setLogicCode('');
         }
       } catch (err: any) {
         console.error(`Error fetching logic block for ${featureName}:`, err);
@@ -130,6 +133,13 @@ export function useLogicBlocksByFeature(featureNames: string[]) {
             result[item.feature_name] = item.logic_code;
           });
         }
+
+        // Ensure all requested features have entries (even if empty)
+        featureNames.forEach(name => {
+          if (!(name in result)) {
+            result[name] = '';
+          }
+        });
         
         setLogicBlocks(result);
       } catch (err: any) {
