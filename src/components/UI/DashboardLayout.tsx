@@ -1,8 +1,9 @@
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../Navigation/Sidebar';
 import FloatingActionButton from './FloatingActionButton';
-import { Trophy, BarChart3, Users, Plus } from 'lucide-react';
+import { Trophy, BarChart3, Users, Plus, Menu } from 'lucide-react';
+import OnboardingWizard from '../Onboarding/OnboardingWizard';
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -24,6 +25,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   fabActions
 }) => {
   const navigate = useNavigate();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Default FAB actions if none provided
   const defaultFabActions = [
@@ -56,17 +58,27 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         {/* Header */}
         {(title || subtitle) && (
           <div className="bg-gray-900/50 backdrop-blur-lg border-b border-gray-800/50 p-6">
-            <div className="max-w-7xl mx-auto">
-              {title && (
-                <h1 className="text-3xl font-bold text-white font-orbitron mb-2">
-                  {title}
-                </h1>
-              )}
-              {subtitle && (
-                <p className="text-gray-400 font-jetbrains">
-                  {subtitle}
-                </p>
-              )}
+            <div className="max-w-7xl mx-auto flex items-center justify-between">
+              <div>
+                {title && (
+                  <h1 className="text-3xl font-bold text-white font-orbitron mb-2">
+                    {title}
+                  </h1>
+                )}
+                {subtitle && (
+                  <p className="text-gray-400 font-jetbrains">
+                    {subtitle}
+                  </p>
+                )}
+              </div>
+              
+              {/* Mobile menu toggle */}
+              <button
+                className="md:hidden p-2 bg-gray-800/80 backdrop-blur-sm rounded-lg text-gray-300 hover:text-white border border-gray-700/50"
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              >
+                <Menu size={20} />
+              </button>
             </div>
           </div>
         )}
@@ -76,6 +88,9 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           {children}
         </div>
       </div>
+      
+      {/* Onboarding Wizard */}
+      <OnboardingWizard />
       
       {/* Floating Action Button */}
       {showFAB && (

@@ -168,7 +168,7 @@ const OnboardingWizard: React.FC = () => {
           </h3>
           <button 
             onClick={skipOnboarding}
-            className="text-gray-400 hover:text-white"
+            className="text-gray-400 hover:text-white transition-colors duration-200"
           >
             <X size={18} />
           </button>
