@@ -1,17 +1,18 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, Trophy, BarChart3, Settings, Share2, QrCode, Eye, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Users, Trophy, BarChart3, Settings, Share2, QrCode, Eye, AlertTriangle, UserPlus, UserMinus, UserX } from 'lucide-react';
 import { supabase, testSupabaseConnection, handleSupabaseError } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 
 // Lazy-loaded components
-const PlayerRegistration = React.lazy(() => import('./PlayerRegistration'));
 const RoundManager = React.lazy(() => import('./RoundManager'));
 const ScoreEntry = React.lazy(() => import('./ScoreEntry'));
 const Standings = React.lazy(() => import('./Standings'));
 const AdminPanel = React.lazy(() => import('./AdminPanel'));
 const QRCodeModal = React.lazy(() => import('./QRCodeModal'));
 const Statistics = React.lazy(() => import('./Statistics/Statistics'));
+const PlayerRoster = React.lazy(() => import('./PlayerRoster'));
+const PlayerManagementModal = React.lazy(() => import('./PlayerManagementModal'));
 
 interface Tournament {
   id: string;
@@ -32,11 +33,13 @@ const TournamentControlCenter: React.FC = () => {
   
   const [user, setUser] = useState<User | null>(null);
   const [tournament, setTournament] = useState<Tournament | null>(null);
-  const [activeTab, setActiveTab] = useState<ActiveTab>('players');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('rounds');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showQRModal, setShowQRModal] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [showPlayerManagementModal, setShowPlayerManagementModal] = useState(false);
+  const [playerManagementMode, setPlayerManagementMode] = useState<'add' | 'remove' | 'pause'>('add');
 
   useEffect(() => {
     initializeComponent();
@@ -130,13 +133,15 @@ const TournamentControlCenter: React.FC = () => {
     await initializeComponent();
   };
 
-  // Navigation handlers for PlayerRegistration
-  const handlePlayerRegistrationBack = () => {
-    navigate('/dashboard');
+  const handleOpenPlayerManagement = (mode: 'add' | 'remove' | 'pause') => {
+    setPlayerManagementMode(mode);
+    setShowPlayerManagementModal(true);
   };
 
-  const handlePlayerRegistrationNext = () => {
-    setActiveTab('rounds');
+  const handlePlayerManagementComplete = () => {
+    setShowPlayerManagementModal(false);
+    // Refresh data if needed
+    loadTournament();
   };
 
   // Navigation handlers for RoundManager
@@ -271,11 +276,43 @@ const TournamentControlCenter: React.FC = () => {
       case 'players':
         return (
           <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" /></div>}>
-            <PlayerRegistration 
-              {...commonProps} 
-              onBack={handlePlayerRegistrationBack}
-              onNext={handlePlayerRegistrationNext}
-            />
+            <div className="space-y-6">
+              {/* Player Management Actions */}
+              <div className="bg-gray-900/50 border border-gray-700 rounded-xl p-6 backdrop-blur-sm">
+                <h2 className="text-xl font-bold text-white font-orbitron mb-4">Player Management</h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <button
+                    onClick={() => handleOpenPlayerManagement('add')}
+                    className="flex items-center justify-center gap-2 px-4 py-3 bg-green-600/20 border border-green-500/50 text-green-400 hover:bg-green-600/30 hover:text-white rounded-lg transition-all duration-200 font-jetbrains"
+                  >
+                    <UserPlus size={18} />
+                    Add Player
+                  </button>
+                  <button
+                    onClick={() => handleOpenPlayerManagement('remove')}
+                    className="flex items-center justify-center gap-2 px-4 py-3 bg-red-600/20 border border-red-500/50 text-red-400 hover:bg-red-600/30 hover:text-white rounded-lg transition-all duration-200 font-jetbrains"
+                  >
+                    <UserMinus size={18} />
+                    Remove Player
+                  </button>
+                  <button
+                    onClick={() => handleOpenPlayerManagement('pause')}
+                    className="flex items-center justify-center gap-2 px-4 py-3 bg-yellow-600/20 border border-yellow-500/50 text-yellow-400 hover:bg-yellow-600/30 hover:text-white rounded-lg transition-all duration-200 font-jetbrains"
+                  >
+                    <UserX size={18} />
+                    Pause Participation
+                  </button>
+                </div>
+              </div>
+              
+              {/* Player Roster */}
+              <PlayerRoster
+                tournamentId={tournamentId!}
+                teamMode={tournament.team_mode || false}
+                onEditPlayer={() => handleOpenPlayerManagement('add')}
+                onDeletePlayer={() => handleOpenPlayerManagement('remove')}
+              />
+            </div>
           </Suspense>
         );
       case 'rounds':
@@ -418,7 +455,20 @@ const TournamentControlCenter: React.FC = () => {
             onClose={() => setShowQRModal(false)}
             tournamentId={tournamentId!}
             tournamentName={tournament.name}
-            slug={tournament.slug}
+          />
+        </Suspense>
+      )}
+
+      {/* Player Management Modal */}
+      {showPlayerManagementModal && (
+        <Suspense fallback={null}>
+          <PlayerManagementModal
+            isOpen={showPlayerManagementModal}
+            onClose={() => setShowPlayerManagementModal(false)}
+            tournamentId={tournamentId!}
+            mode={playerManagementMode}
+            onComplete={handlePlayerManagementComplete}
+            teamMode={tournament.team_mode || false}
           />
         </Suspense>
       )}
