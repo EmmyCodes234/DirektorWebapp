@@ -6,6 +6,7 @@ import type { User } from '@supabase/supabase-js';
 import { ChecklistStep } from './UI/TournamentChecklist';
 import TournamentChecklist from './UI/TournamentChecklist';
 import FloatingActionButton from './UI/FloatingActionButton';
+import Sidebar from './Navigation/Sidebar';
 
 // Lazy-loaded components
 const RoundManager = React.lazy(() => import('./RoundManager'));
@@ -47,9 +48,20 @@ const TournamentControlCenter: React.FC = () => {
   const [hasRegisteredPlayers, setHasRegisteredPlayers] = useState(false);
   const [tournamentWinner, setTournamentWinner] = useState<{name: string, team?: string} | null>(null);
   const [checklistSteps, setChecklistSteps] = useState<ChecklistStep[]>([]);
+  const [isMobile, setIsMobile] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   useEffect(() => {
     initializeComponent();
+    
+    // Check if mobile
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
   }, [tournamentId]);
 
   useEffect(() => {
@@ -681,124 +693,130 @@ const TournamentControlCenter: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-black">
-      {/* Header */}
-      <div className="bg-gray-900/50 backdrop-blur-lg border-b border-gray-800/50">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={handleBack}
-                className="flex items-center gap-2 px-3 py-2 bg-gray-800/50 hover:bg-gray-700/50 rounded-lg text-gray-300 hover:text-white transition-all duration-200 border border-gray-700/50"
-              >
-                <ArrowLeft size={18} />
-                <span className="font-jetbrains text-sm">Back</span>
-              </button>
-              
-              <div>
-                <h1 className="text-2xl font-bold text-white font-orbitron">{tournament.name}</h1>
-                <p className="text-gray-400 font-jetbrains text-sm">
-                  Round {tournament.current_round} of {tournament.rounds} • {tournament.status}
-                </p>
+    <div className="flex h-screen bg-black overflow-hidden">
+      {/* Sidebar */}
+      <Sidebar />
+      
+      {/* Main Content */}
+      <div className="flex-1 overflow-auto">
+        {/* Header */}
+        <div className="bg-gray-900/50 backdrop-blur-lg border-b border-gray-800/50">
+          <div className="max-w-7xl mx-auto px-4 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={handleBack}
+                  className="flex items-center gap-2 px-3 py-2 bg-gray-800/50 hover:bg-gray-700/50 rounded-lg text-gray-300 hover:text-white transition-all duration-200 border border-gray-700/50"
+                >
+                  <ArrowLeft size={18} />
+                  <span className="font-jetbrains text-sm">Back</span>
+                </button>
+                
+                <div>
+                  <h1 className="text-2xl font-bold text-white font-orbitron">{tournament.name}</h1>
+                  <p className="text-gray-400 font-jetbrains text-sm">
+                    Round {tournament.current_round} of {tournament.rounds} • {tournament.status}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                {tournament.public_sharing_enabled && (
+                  <>
+                    <button
+                      onClick={handleViewPublic}
+                      className="flex items-center gap-2 px-3 py-2 bg-blue-600/20 border border-blue-500/50 text-blue-400 hover:bg-blue-600/30 hover:text-white rounded-lg transition-all duration-200 font-jetbrains text-sm"
+                    >
+                      <Eye size={16} />
+                      View Public
+                    </button>
+                    
+                    <button
+                      onClick={handleShowQR}
+                      className="flex items-center gap-2 px-3 py-2 bg-purple-600/20 border border-purple-500/50 text-purple-400 hover:bg-purple-600/30 hover:text-white rounded-lg transition-all duration-200 font-jetbrains text-sm"
+                    >
+                      <QrCode size={16} />
+                      QR Code
+                    </button>
+                  </>
+                )}
               </div>
             </div>
+          </div>
+        </div>
 
-            <div className="flex items-center gap-3">
-              {tournament.public_sharing_enabled && (
-                <>
+        {/* Tournament Checklist */}
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <TournamentChecklist 
+            steps={checklistSteps}
+            onStepClick={handleChecklistStepClick}
+            orientation="horizontal"
+          />
+        </div>
+
+        {/* Navigation Tabs */}
+        <div className="bg-gray-900/30 backdrop-blur-lg border-b border-gray-800/50">
+          <div className="max-w-7xl mx-auto px-4">
+            <div className="flex space-x-1 overflow-x-auto">
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                
+                // Skip the summary tab in the navigation
+                if (tab.id === 'summary') return null;
+                
+                return (
                   <button
-                    onClick={handleViewPublic}
-                    className="flex items-center gap-2 px-3 py-2 bg-blue-600/20 border border-blue-500/50 text-blue-400 hover:bg-blue-600/30 hover:text-white rounded-lg transition-all duration-200 font-jetbrains text-sm"
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex items-center gap-2 px-4 py-3 font-jetbrains text-sm font-medium transition-all duration-300 border-b-2 whitespace-nowrap ${
+                      isActive
+                        ? 'text-white border-[#6366F1] bg-[#2A2D3E]'
+                        : 'text-gray-400 border-transparent hover:text-white hover:border-gray-600'
+                    }`}
                   >
-                    <Eye size={16} />
-                    View Public
+                    <Icon size={16} />
+                    {tab.label}
                   </button>
-                  
-                  <button
-                    onClick={handleShowQR}
-                    className="flex items-center gap-2 px-3 py-2 bg-purple-600/20 border border-purple-500/50 text-purple-400 hover:bg-purple-600/30 hover:text-white rounded-lg transition-all duration-200 font-jetbrains text-sm"
-                  >
-                    <QrCode size={16} />
-                    QR Code
-                  </button>
-                </>
-              )}
+                );
+              })}
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Tournament Checklist */}
-      <div className="max-w-7xl mx-auto px-4 py-4">
-        <TournamentChecklist 
-          steps={checklistSteps}
-          onStepClick={handleChecklistStepClick}
-          orientation="horizontal"
-        />
-      </div>
-
-      {/* Navigation Tabs */}
-      <div className="bg-gray-900/30 backdrop-blur-lg border-b border-gray-800/50">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex space-x-1 overflow-x-auto">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              
-              // Skip the summary tab in the navigation
-              if (tab.id === 'summary') return null;
-              
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-3 font-jetbrains text-sm font-medium transition-all duration-200 border-b-2 whitespace-nowrap ${
-                    isActive
-                      ? 'text-blue-400 border-blue-500 bg-blue-500/10'
-                      : 'text-gray-400 border-transparent hover:text-white hover:border-gray-600'
-                  }`}
-                >
-                  <Icon size={16} />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
+        {/* Content */}
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          {renderTabContent()}
         </div>
+
+        {/* QR Code Modal */}
+        {showQRModal && (
+          <Suspense fallback={null}>
+            <QRCodeModal
+              isOpen={showQRModal}
+              onClose={() => setShowQRModal(false)}
+              tournamentId={tournamentId!}
+              tournamentName={tournament.name}
+            />
+          </Suspense>
+        )}
+
+        {/* Add Player Modal */}
+        {showAddPlayerModal && (
+          <Suspense fallback={null}>
+            <AddPlayerModal
+              isOpen={showAddPlayerModal}
+              onClose={() => setShowAddPlayerModal(false)}
+              onPlayerAdded={handlePlayerAdded}
+              tournamentId={tournamentId!}
+              teamMode={tournament.team_mode}
+            />
+          </Suspense>
+        )}
+
+        {/* Floating Action Button */}
+        <FloatingActionButton actions={getFabActions()} />
       </div>
-
-      {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        {renderTabContent()}
-      </div>
-
-      {/* QR Code Modal */}
-      {showQRModal && (
-        <Suspense fallback={null}>
-          <QRCodeModal
-            isOpen={showQRModal}
-            onClose={() => setShowQRModal(false)}
-            tournamentId={tournamentId!}
-            tournamentName={tournament.name}
-          />
-        </Suspense>
-      )}
-
-      {/* Add Player Modal */}
-      {showAddPlayerModal && (
-        <Suspense fallback={null}>
-          <AddPlayerModal
-            isOpen={showAddPlayerModal}
-            onClose={() => setShowAddPlayerModal(false)}
-            onPlayerAdded={handlePlayerAdded}
-            tournamentId={tournamentId!}
-            teamMode={tournament.team_mode}
-          />
-        </Suspense>
-      )}
-
-      {/* Floating Action Button */}
-      <FloatingActionButton actions={getFabActions()} />
     </div>
   );
 };
