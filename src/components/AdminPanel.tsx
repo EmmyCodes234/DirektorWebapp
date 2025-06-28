@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Trophy, Award, RefreshCw, Check, AlertTriangle, Download, Upload, Save } from 'lucide-react';
+import { Settings, Trophy, Award, RefreshCw, Check, AlertTriangle, Download, Upload, Save, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuditLog } from '../hooks/useAuditLog';
 import { awardTournamentBadges } from '../utils/badgeAwardLogic';
+import { generateTouFile } from '../utils/touExport';
 
 interface AdminPanelProps {
   tournamentId: string;
@@ -20,6 +21,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isMarkingComplete, setIsMarkingComplete] = useState(false);
+  const [isExportingTou, setIsExportingTou] = useState(false);
   
   const { logAction } = useAuditLog();
 
@@ -129,6 +131,73 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
       });
     } finally {
       setIsMarkingComplete(false);
+    }
+  };
+
+  const handleExportTouFile = async () => {
+    try {
+      setIsExportingTou(true);
+      setError(null);
+      
+      // Log export start
+      logAction({
+        action: 'tournament_tou_export_started',
+        details: {
+          tournament_id: tournamentId,
+          tournament_name: tournament.name
+        }
+      });
+      
+      // Generate TOU file
+      const touContent = await generateTouFile(tournamentId, tournament);
+      
+      // Create a blob and download
+      const blob = new Blob([touContent], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      
+      // Create filename from tournament name
+      const filename = tournament.slug 
+        ? `${tournament.slug}.tou` 
+        : `${tournament.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}.tou`;
+      
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      // Show success message
+      setSuccess('TOU file exported successfully!');
+      
+      // Log export completion
+      logAction({
+        action: 'tournament_tou_export_completed',
+        details: {
+          tournament_id: tournamentId,
+          tournament_name: tournament.name,
+          filename
+        }
+      });
+      
+      // Clear success message after 5 seconds
+      setTimeout(() => {
+        setSuccess(null);
+      }, 5000);
+    } catch (err: any) {
+      console.error('Error exporting TOU file:', err);
+      setError('Failed to export TOU file: ' + err.message);
+      
+      // Log error
+      logAction({
+        action: 'tournament_tou_export_error',
+        details: {
+          tournament_id: tournamentId,
+          tournament_name: tournament.name,
+          error: err.message
+        }
+      });
+    } finally {
+      setIsExportingTou(false);
     }
   };
 
@@ -261,23 +330,33 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
             </button>
           </div>
           
-          {/* Import Tournament Data */}
-          <div className="bg-purple-900/20 border border-purple-500/30 rounded-lg p-6">
-            <h3 className="text-lg font-bold text-purple-300 font-orbitron mb-4 flex items-center gap-2">
-              <Upload size={20} />
-              Import Tournament Data
+          {/* Export TOU File */}
+          <div className="bg-cyan-900/20 border border-cyan-500/30 rounded-lg p-6">
+            <h3 className="text-lg font-bold text-cyan-300 font-orbitron mb-4 flex items-center gap-2">
+              <FileText size={20} />
+              Export .TOU File
             </h3>
             
             <p className="text-gray-300 font-jetbrains text-sm mb-6">
-              Import tournament data from CSV files. This can be used to restore from a backup or migrate data from another system.
+              Generate a .TOU file compatible with rating systems like WESPA or NASPA. This file contains all player results in the required format for ratings processing.
             </p>
             
             <button
-              onClick={() => {/* Import logic would go here */}}
-              className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-jetbrains text-sm transition-all duration-200"
+              onClick={handleExportTouFile}
+              disabled={isExportingTou}
+              className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-jetbrains text-sm transition-all duration-200"
             >
-              <Upload size={16} />
-              Import Data
+              {isExportingTou ? (
+                <>
+                  <RefreshCw size={16} className="animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <FileText size={16} />
+                  Export .TOU File
+                </>
+              )}
             </button>
           </div>
         </div>
