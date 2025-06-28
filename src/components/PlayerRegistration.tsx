@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Eye, Save, ArrowLeft, ChevronRight, Trophy, CheckCircle, Share2, Copy, Check, UserCheck, Settings, Calendar } from 'lucide-react';
+import { Users, Eye, Save, ArrowLeft, ChevronRight, Trophy, CheckCircle, Share2, Copy, Check, UserCheck, Settings, Calendar, AlertTriangle, RefreshCw } from 'lucide-react';
 import ParticleBackground from './ParticleBackground';
 import Button from './Button';
 import PlayerPreviewTable from './PlayerPreviewTable';
@@ -8,7 +8,7 @@ import TeamManager from './TeamManager';
 import TeamScheduleModal from './TeamScheduleModal';
 import { parsePlayerInput } from '../utils/playerParser';
 import { generateTeamRoundRobinPairings } from '../utils/teamPairingAlgorithms';
-import { supabase } from '../lib/supabase';
+import { supabase, handleSupabaseError, retrySupabaseOperation, testSupabaseConnection } from '../lib/supabase';
 import { ParsedPlayer, Player, Tournament, Division, Team } from '../types/database';
 
 interface PlayerRegistrationProps {
@@ -35,9 +35,11 @@ const PlayerRegistration: React.FC<PlayerRegistrationProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [isGeneratingSchedule, setIsGeneratingSchedule] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   const [completedDivisions, setCompletedDivisions] = useState<Set<number>>(new Set());
   const [publicUrl, setPublicUrl] = useState<string>('');
   const [linkCopied, setLinkCopied] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   const getPlaceholderText = (isTeamMode: boolean) => {
     if (isTeamMode) {
@@ -65,18 +67,40 @@ James Rodriguez, 1856`;
     loadTournamentData();
   }, [tournamentId]);
 
+  const checkConnection = async () => {
+    const result = await testSupabaseConnection();
+    if (!result.success) {
+      setConnectionError(result.error || 'Unable to connect to database');
+      return false;
+    }
+    setConnectionError(null);
+    return true;
+  };
+
   const loadTournamentData = async () => {
     try {
       setIsLoading(true);
+      setError(null);
+      setConnectionError(null);
       
-      // Load tournament
-      const { data: tournamentData, error: tournamentError } = await supabase
-        .from('tournaments')
-        .select('*')
-        .eq('id', tournamentId)
-        .single();
+      // Test connection first
+      const isConnected = await checkConnection();
+      if (!isConnected) {
+        return;
+      }
+      
+      // Load tournament with retry mechanism
+      const tournamentData = await retrySupabaseOperation(async () => {
+        const { data, error } = await supabase
+          .from('tournaments')
+          .select('*')
+          .eq('id', tournamentId)
+          .single();
 
-      if (tournamentError) throw tournamentError;
+        if (error) throw error;
+        return data;
+      });
+
       setTournament(tournamentData);
 
       // Generate public URL using slug if available
@@ -87,15 +111,18 @@ James Rodriguez, 1856`;
       }
 
       // Load divisions if they exist
-      const { data: divisionsData, error: divisionsError } = await supabase
-        .from('divisions')
-        .select('*')
-        .eq('tournament_id', tournamentId)
-        .order('division_number');
+      const divisionsData = await retrySupabaseOperation(async () => {
+        const { data, error } = await supabase
+          .from('divisions')
+          .select('*')
+          .eq('tournament_id', tournamentId)
+          .order('division_number');
 
-      if (divisionsError && divisionsError.code !== 'PGRST116') {
-        throw divisionsError;
-      }
+        if (error && error.code !== 'PGRST116') {
+          throw error;
+        }
+        return data;
+      });
 
       // If no divisions found or only 1 division configured, create a default division
       if (!divisionsData || divisionsData.length === 0) {
@@ -107,26 +134,34 @@ James Rodriguez, 1856`;
             division_number: i + 1
           }));
 
-          const { data: createdDivisions, error: createError } = await supabase
-            .from('divisions')
-            .insert(defaultDivisions)
-            .select();
+          const createdDivisions = await retrySupabaseOperation(async () => {
+            const { data, error } = await supabase
+              .from('divisions')
+              .insert(defaultDivisions)
+              .select();
 
-          if (createError) throw createError;
+            if (error) throw error;
+            return data;
+          });
+
           setDivisions(createdDivisions || []);
         } else {
           // Single division tournament - create one default division
-          const { data: singleDivision, error: singleError } = await supabase
-            .from('divisions')
-            .insert([{
-              tournament_id: tournamentId,
-              name: 'Main Division',
-              division_number: 1
-            }])
-            .select()
-            .single();
+          const singleDivision = await retrySupabaseOperation(async () => {
+            const { data, error } = await supabase
+              .from('divisions')
+              .insert([{
+                tournament_id: tournamentId,
+                name: 'Main Division',
+                division_number: 1
+              }])
+              .select()
+              .single();
 
-          if (singleError) throw singleError;
+            if (error) throw error;
+            return data;
+          });
+
           setDivisions([singleDivision]);
         }
       } else {
@@ -138,9 +173,10 @@ James Rodriguez, 1856`;
         await loadTeams();
       }
 
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error loading tournament data:', err);
-      setError('Failed to load tournament data');
+      const errorMessage = handleSupabaseError(err, 'loading tournament data');
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -148,19 +184,23 @@ James Rodriguez, 1856`;
 
   const loadTeams = async () => {
     try {
-      const { data: teamsData, error: teamsError } = await supabase
-        .from('teams')
-        .select('*')
-        .eq('tournament_id', tournamentId)
-        .order('name');
+      const teamsData = await retrySupabaseOperation(async () => {
+        const { data, error } = await supabase
+          .from('teams')
+          .select('*')
+          .eq('tournament_id', tournamentId)
+          .order('name');
 
-      if (teamsError && teamsError.code !== 'PGRST116') {
-        throw teamsError;
-      }
+        if (error && error.code !== 'PGRST116') {
+          throw error;
+        }
+        return data;
+      });
 
       setTeams(teamsData || []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error loading teams:', err);
+      // Don't show error for teams loading failure, just log it
     }
   };
 
@@ -216,6 +256,12 @@ James Rodriguez, 1856`;
     setError(null);
 
     try {
+      // Test connection before attempting to save
+      const isConnected = await checkConnection();
+      if (!isConnected) {
+        throw new Error('Unable to connect to database. Please check your internet connection.');
+      }
+
       const playersToInsert: Omit<Player, 'id' | 'created_at'>[] = validPlayers.map(player => ({
         name: player.name,
         rating: player.rating,
@@ -223,13 +269,13 @@ James Rodriguez, 1856`;
         team_name: isTeamMode ? player.team_name : undefined
       }));
 
-      const { error: insertError } = await supabase
-        .from('players')
-        .insert(playersToInsert);
+      await retrySupabaseOperation(async () => {
+        const { error } = await supabase
+          .from('players')
+          .insert(playersToInsert);
 
-      if (insertError) {
-        throw insertError;
-      }
+        if (error) throw error;
+      });
 
       // Mark this division as completed
       setCompletedDivisions(prev => new Set([...prev, currentDivisionIndex]));
@@ -238,6 +284,7 @@ James Rodriguez, 1856`;
       setInputText('');
       setParsedPlayers([]);
       setShowPreview(false);
+      setRetryCount(0); // Reset retry count on success
 
       // Move to next division or finish
       if (isLastDivision) {
@@ -257,12 +304,20 @@ James Rodriguez, 1856`;
         setCurrentDivisionIndex(currentDivisionIndex + 1);
       }
 
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving players:', err);
-      setError('Failed to save players. Please try again.');
+      const errorMessage = handleSupabaseError(err, 'saving players');
+      setError(errorMessage);
+      setRetryCount(prev => prev + 1);
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleRetryConnection = async () => {
+    setError(null);
+    setConnectionError(null);
+    await loadTournamentData();
   };
 
   const handlePreviousDivision = () => {
@@ -304,13 +359,22 @@ James Rodriguez, 1856`;
     setError(null);
     
     try {
-      // Get all players
-      const { data: playersData, error: playersError } = await supabase
-        .from('players')
-        .select('*')
-        .eq('tournament_id', tournamentId);
-        
-      if (playersError) throw playersError;
+      // Test connection first
+      const isConnected = await checkConnection();
+      if (!isConnected) {
+        throw new Error('Unable to connect to database. Please check your internet connection.');
+      }
+
+      // Get all players with retry mechanism
+      const playersData = await retrySupabaseOperation(async () => {
+        const { data, error } = await supabase
+          .from('players')
+          .select('*')
+          .eq('tournament_id', tournamentId);
+          
+        if (error) throw error;
+        return data;
+      });
       
       // Group players by team
       const teamMap = new Map<string, Player[]>();
@@ -334,10 +398,14 @@ James Rodriguez, 1856`;
       
       // Update tournament rounds if needed
       if (tournament && tournament.rounds !== totalRounds) {
-        await supabase
-          .from('tournaments')
-          .update({ rounds: totalRounds })
-          .eq('id', tournamentId);
+        await retrySupabaseOperation(async () => {
+          const { error } = await supabase
+            .from('tournaments')
+            .update({ rounds: totalRounds })
+            .eq('id', tournamentId);
+          
+          if (error) throw error;
+        });
       }
       
       // Generate round-robin schedule for teams
@@ -376,11 +444,13 @@ James Rodriguez, 1856`;
             player2_gibsonized: false
           }));
           
-          const { error: pairingError } = await supabase
-            .from('pairings')
-            .insert(pairingsToInsert);
-            
-          if (pairingError) throw pairingError;
+          await retrySupabaseOperation(async () => {
+            const { error } = await supabase
+              .from('pairings')
+              .insert(pairingsToInsert);
+              
+            if (error) throw error;
+          });
         }
       }
       
@@ -389,7 +459,8 @@ James Rodriguez, 1856`;
       
     } catch (err: any) {
       console.error('Error generating team schedule:', err);
-      setError(`Failed to generate team schedule: ${err.message}`);
+      const errorMessage = handleSupabaseError(err, 'generating team schedule');
+      setError(errorMessage);
       // Still allow proceeding to next step even if schedule generation fails
       onNext();
     } finally {
@@ -403,7 +474,44 @@ James Rodriguez, 1856`;
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-400 font-jetbrains">Loading tournament data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Connection Error Screen
+  if (connectionError) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center">
+        <ParticleBackground />
+        <div className="relative z-10 max-w-md mx-auto text-center p-8">
+          <div className="bg-red-900/30 border border-red-500/50 rounded-xl p-8 backdrop-blur-sm">
+            <AlertTriangle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-white mb-4 font-orbitron">Connection Error</h2>
+            <p className="text-red-300 font-jetbrains text-sm mb-6">
+              {connectionError}
+            </p>
+            <div className="space-y-3">
+              <Button
+                icon={RefreshCw}
+                label="Retry Connection"
+                onClick={handleRetryConnection}
+                variant="blue"
+                className="w-full"
+              />
+              <button
+                onClick={onBack}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white rounded-lg font-jetbrains transition-all duration-200"
+              >
+                <ArrowLeft size={16} />
+                Back to Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -648,8 +756,27 @@ James Rodriguez, 1856`;
           {/* Error Display */}
           {error && (
             <div className="mb-8">
-              <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-4 text-red-300 font-jetbrains text-sm">
-                {error}
+              <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-4 backdrop-blur-sm">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-red-300 font-jetbrains text-sm">{error}</p>
+                    {retryCount > 0 && (
+                      <p className="text-red-400 font-jetbrains text-xs mt-2">
+                        Retry attempt: {retryCount}
+                      </p>
+                    )}
+                  </div>
+                  {error.includes('connection') && (
+                    <button
+                      onClick={handleRetryConnection}
+                      className="flex items-center gap-1 px-3 py-1 bg-red-600/20 border border-red-500/50 text-red-400 hover:bg-red-600/30 rounded text-xs font-jetbrains transition-all duration-200"
+                    >
+                      <RefreshCw size={12} />
+                      Retry
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           )}
