@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, User, UserCheck, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Team } from '../types/database';
+import { parsePlayerInput } from '../utils/playerParser';
+import TeamLogo from './TeamLogo';
 
 interface AddPlayerModalProps {
   isOpen: boolean;
