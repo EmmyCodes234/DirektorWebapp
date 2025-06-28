@@ -5,14 +5,13 @@ import { WizardResponses, TournamentConfig, PairingFormat } from '../types/datab
 import { recommendPairingSystem } from '../utils/pairingStrategyIntelligence';
 import { useAuditLog } from '../hooks/useAuditLog';
 import { generateTournamentSlug } from '../utils/slugify';
-import { useTournamentDraftSystem } from '../hooks/useTournamentDraftSystem';
-import DraftStatusIndicator from './TournamentDrafts/DraftStatusIndicator';
+import { useTournamentDrafts } from '../hooks/useTournamentDrafts';
 
 interface TournamentSetupModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (tournamentId: string) => void;
-  draftId?: string;
+  initialDraftId?: string;
 }
 
 interface FormData {
@@ -164,31 +163,35 @@ const PAIRING_FORMATS: Array<{
   }
 ];
 
+const DEFAULT_FORM_DATA: FormData = {
+  name: '',
+  date: '',
+  venue: '',
+  rounds: 7,
+  divisions: 1,
+  divisionNames: ['Main Division'],
+  teamMode: false,
+  isPasswordProtected: false,
+  password: '',
+  publicSharingEnabled: true,
+  showPassword: false
+};
+
 const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
-  draftId
+  initialDraftId
 }) => {
   const [currentStep, setCurrentStep] = useState<'basic' | 'pairing-method' | 'wizard' | 'manual-selection' | 'review'>('basic');
   const [wizardStepIndex, setWizardStepIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [draftId, setDraftId] = useState<string | undefined>(initialDraftId);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   // Form data
-  const [formData, setFormData] = useState<FormData>({
-    name: '',
-    date: '',
-    venue: '',
-    rounds: 7,
-    divisions: 1,
-    divisionNames: ['Main Division'],
-    teamMode: false,
-    isPasswordProtected: false,
-    password: '',
-    publicSharingEnabled: true,
-    showPassword: false
-  });
+  const [formData, setFormData] = useState<FormData>(DEFAULT_FORM_DATA);
 
   // Wizard responses
   const [wizardResponses, setWizardResponses] = useState<Partial<WizardResponses>>({});
@@ -197,159 +200,92 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
   const [recommendationReasoning, setRecommendationReasoning] = useState<string>('');
 
   const { logAction } = useAuditLog();
-  
-  // Draft system integration
-  const {
-    createDraft,
-    loadDraft,
-    updateDraft,
-    completeDraft,
-    isSaving,
-    lastSaved,
-    error: draftError,
-    isOnline
-  } = useTournamentDraftSystem();
-  
-  const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
+  const { saveDraft, getDraft, completeDraft } = useTournamentDrafts();
 
-  // Initialize or load draft
+  // Load draft data if initialDraftId is provided
   useEffect(() => {
+    const loadDraft = async () => {
+      if (initialDraftId) {
+        setDraftId(initialDraftId);
+        const draft = await getDraft(initialDraftId);
+        if (draft) {
+          // Restore form data
+          if (draft.data.formData) {
+            setFormData(draft.data.formData);
+          }
+          
+          // Restore wizard responses
+          if (draft.data.wizardResponses) {
+            setWizardResponses(draft.data.wizardResponses);
+          }
+          
+          // Restore pairing format
+          if (draft.data.selectedPairingFormat) {
+            setSelectedPairingFormat(draft.data.selectedPairingFormat);
+          }
+          
+          // Restore recommended system
+          if (draft.data.recommendedSystem) {
+            setRecommendedSystem(draft.data.recommendedSystem);
+          }
+          
+          // Restore recommendation reasoning
+          if (draft.data.recommendationReasoning) {
+            setRecommendationReasoning(draft.data.recommendationReasoning);
+          }
+          
+          // Restore current step
+          if (draft.data.currentStep) {
+            setCurrentStep(draft.data.currentStep);
+          }
+          
+          // Restore wizard step index
+          if (draft.data.wizardStepIndex !== undefined) {
+            setWizardStepIndex(draft.data.wizardStepIndex);
+          }
+        }
+      }
+    };
+    
     if (isOpen) {
-      if (draftId) {
-        // Load existing draft
-        loadExistingDraft(draftId);
-      } else {
-        // Create new draft
-        initializeNewDraft();
-      }
+      loadDraft();
     }
-  }, [isOpen, draftId]);
-  
-  // Save draft when form data changes
+  }, [isOpen, initialDraftId, getDraft]);
+
+  // Auto-save draft when form data changes
   useEffect(() => {
-    if (currentDraftId && isOpen) {
-      const draftData = {
-        ...formData,
-        wizardResponses,
-        selectedPairingFormat,
-        recommendedSystem,
-        recommendationReasoning,
-        currentStep,
-        wizardStepIndex,
-        step: getCurrentStepName()
-      };
-      
-      updateDraft(currentDraftId, draftData);
-    }
-  }, [formData, wizardResponses, selectedPairingFormat, currentStep, wizardStepIndex]);
-  
-  const getCurrentStepName = (): string => {
-    switch (currentStep) {
-      case 'basic': return 'Basic Information';
-      case 'pairing-method': return 'Pairing Method Selection';
-      case 'wizard': return `Pairing Wizard (${wizardStepIndex + 1}/${WIZARD_STEPS.length})`;
-      case 'manual-selection': return 'Manual Pairing Selection';
-      case 'review': return 'Review & Create';
-      default: return 'Tournament Setup';
-    }
-  };
-  
-  const loadExistingDraft = async (id: string) => {
-    try {
-      setIsLoading(true);
-      const draft = await loadDraft(id);
-      
-      if (draft) {
-        // Restore form data
-        if (draft.data.name) {
-          setFormData({
-            name: draft.data.name || '',
-            date: draft.data.date || '',
-            venue: draft.data.venue || '',
-            rounds: draft.data.rounds || 7,
-            divisions: draft.data.divisions || 1,
-            divisionNames: draft.data.divisionNames || ['Main Division'],
-            teamMode: draft.data.teamMode || false,
-            isPasswordProtected: draft.data.isPasswordProtected || false,
-            password: draft.data.password || '',
-            publicSharingEnabled: draft.data.publicSharingEnabled !== false,
-            showPassword: false
-          });
+    const saveTimeout = setTimeout(async () => {
+      if (isOpen && (formData.name || Object.keys(wizardResponses).length > 0)) {
+        setAutoSaveStatus('saving');
+        
+        const draftData = {
+          formData,
+          wizardResponses,
+          selectedPairingFormat,
+          recommendedSystem,
+          recommendationReasoning,
+          currentStep,
+          wizardStepIndex
+        };
+        
+        const savedDraftId = await saveDraft(draftData, draftId);
+        
+        if (savedDraftId) {
+          setDraftId(savedDraftId);
+          setAutoSaveStatus('saved');
+          
+          // Reset to idle after a delay
+          setTimeout(() => {
+            setAutoSaveStatus('idle');
+          }, 2000);
+        } else {
+          setAutoSaveStatus('error');
         }
-        
-        // Restore wizard state
-        if (draft.data.wizardResponses) {
-          setWizardResponses(draft.data.wizardResponses);
-        }
-        
-        // Restore pairing format
-        if (draft.data.selectedPairingFormat) {
-          setSelectedPairingFormat(draft.data.selectedPairingFormat);
-        }
-        
-        if (draft.data.recommendedSystem) {
-          setRecommendedSystem(draft.data.recommendedSystem);
-        }
-        
-        if (draft.data.recommendationReasoning) {
-          setRecommendationReasoning(draft.data.recommendationReasoning);
-        }
-        
-        // Restore current step
-        if (draft.data.currentStep) {
-          setCurrentStep(draft.data.currentStep);
-        }
-        
-        if (draft.data.wizardStepIndex !== undefined) {
-          setWizardStepIndex(draft.data.wizardStepIndex);
-        }
-        
-        setCurrentDraftId(id);
-        
-        // Log draft loaded
-        logAction({
-          action: 'tournament_draft_loaded',
-          details: {
-            draft_id: id,
-            draft_name: draft.name || 'Untitled Tournament'
-          }
-        });
       }
-    } catch (err) {
-      console.error('Error loading draft:', err);
-      setError('Failed to load draft. Starting with a new tournament.');
-      
-      // Create new draft as fallback
-      initializeNewDraft();
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  const initializeNewDraft = async () => {
-    try {
-      // Create a new draft
-      const newDraftId = await createDraft({
-        name: 'New Tournament',
-        step: 'Basic Information'
-      });
-      
-      if (newDraftId) {
-        setCurrentDraftId(newDraftId);
-        
-        // Log new draft created
-        logAction({
-          action: 'tournament_draft_created',
-          details: {
-            draft_id: newDraftId
-          }
-        });
-      }
-    } catch (err) {
-      console.error('Error creating draft:', err);
-      // Continue without draft functionality
-    }
-  };
+    }, 1500);
+    
+    return () => clearTimeout(saveTimeout);
+  }, [formData, wizardResponses, selectedPairingFormat, recommendedSystem, recommendationReasoning, currentStep, wizardStepIndex, isOpen, draftId, saveDraft]);
 
   const handleInputChange = (field: keyof FormData, value: string | number | boolean) => {
     setFormData(prev => {
@@ -414,22 +350,8 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
         setRecommendedSystem('team-round-robin');
         setRecommendationReasoning('Team Round-Robin is automatically selected for team-based tournaments, ensuring each team plays every other team with all possible player matchups.');
         setCurrentStep('review');
-        
-        // Save checkpoint
-        if (currentDraftId) {
-          updateDraft(currentDraftId, {
-            selectedPairingFormat: 'team-round-robin',
-            recommendedSystem: 'team-round-robin',
-            recommendationReasoning: 'Team Round-Robin is automatically selected for team-based tournaments, ensuring each team plays every other team with all possible player matchups.'
-          }, 'pairingMethod');
-        }
       } else {
         setCurrentStep('pairing-method');
-        
-        // Save checkpoint
-        if (currentDraftId) {
-          updateDraft(currentDraftId, {}, 'basicInfo');
-        }
       }
     }
   };
@@ -446,11 +368,6 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
           tournament_name: formData.name
         }
       });
-      
-      // Save checkpoint
-      if (currentDraftId) {
-        updateDraft(currentDraftId, {}, 'pairingMethod');
-      }
     } else {
       setCurrentStep('manual-selection');
       
@@ -461,11 +378,6 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
           tournament_name: formData.name
         }
       });
-      
-      // Save checkpoint
-      if (currentDraftId) {
-        updateDraft(currentDraftId, {}, 'pairingMethod');
-      }
     }
   };
 
@@ -502,13 +414,6 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
           responses: updatedResponses
         }
       });
-      
-      // Save checkpoint
-      if (currentDraftId) {
-        updateDraft(currentDraftId, {
-          wizardResponses: updatedResponses
-        }, 'wizardCompleted');
-      }
     }
   };
 
@@ -526,15 +431,6 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
         selection_method: 'manual'
       }
     });
-    
-    // Save checkpoint
-    if (currentDraftId) {
-      updateDraft(currentDraftId, {
-        selectedPairingFormat: format,
-        recommendedSystem: format,
-        recommendationReasoning: `You manually selected ${format.charAt(0).toUpperCase() + format.slice(1).replace('-', ' ')} as your preferred pairing system.`
-      }, 'manualSelection');
-    }
   };
 
   const generateRecommendation = (responses: Partial<WizardResponses>) => {
@@ -689,6 +585,11 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
         if (divisionError) throw divisionError;
       }
 
+      // Mark draft as completed if we have a draft ID
+      if (draftId) {
+        await completeDraft(draftId);
+      }
+
       // Log tournament creation
       logAction({
         action: 'tournament_created',
@@ -703,20 +604,6 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
           slug: finalSlug
         }
       });
-      
-      // Mark draft as completed
-      if (currentDraftId) {
-        await completeDraft(currentDraftId, tournament.id);
-        
-        // Log draft completion
-        logAction({
-          action: 'tournament_draft_completed',
-          details: {
-            draft_id: currentDraftId,
-            tournament_id: tournament.id
-          }
-        });
-      }
 
       // Success! Call the success callback with tournament ID
       onSuccess(tournament.id);
@@ -732,22 +619,11 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
   const handleClose = () => {
     setCurrentStep('basic');
     setWizardStepIndex(0);
-    setFormData({
-      name: '',
-      date: '',
-      venue: '',
-      rounds: 7,
-      divisions: 1,
-      divisionNames: ['Main Division'],
-      teamMode: false,
-      isPasswordProtected: false,
-      password: '',
-      publicSharingEnabled: true,
-      showPassword: false
-    });
+    setFormData(DEFAULT_FORM_DATA);
     setWizardResponses({});
     setSelectedPairingFormat('swiss');
     setError(null);
+    setDraftId(undefined);
     onClose();
   };
 
@@ -789,28 +665,42 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
             </div>
           </div>
           
-          <button
-            onClick={handleClose}
-            className="w-10 h-10 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-all duration-200"
-          >
-            <X size={24} />
-          </button>
+          <div className="flex items-center gap-4">
+            {/* Auto-save status indicator */}
+            {draftId && (
+              <div className="text-sm font-jetbrains">
+                {autoSaveStatus === 'saving' && (
+                  <span className="text-yellow-400 flex items-center">
+                    <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse mr-2"></div>
+                    Saving...
+                  </span>
+                )}
+                {autoSaveStatus === 'saved' && (
+                  <span className="text-green-400 flex items-center">
+                    <div className="w-2 h-2 bg-green-400 rounded-full mr-2"></div>
+                    Draft saved
+                  </span>
+                )}
+                {autoSaveStatus === 'error' && (
+                  <span className="text-red-400 flex items-center">
+                    <div className="w-2 h-2 bg-red-400 rounded-full mr-2"></div>
+                    Save failed
+                  </span>
+                )}
+              </div>
+            )}
+            
+            <button
+              onClick={handleClose}
+              className="w-10 h-10 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-all duration-200"
+            >
+              <X size={24} />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
-          {/* Draft Status Indicator */}
-          {currentDraftId && (
-            <div className="mb-4">
-              <DraftStatusIndicator
-                isSaving={isSaving}
-                lastSaved={lastSaved}
-                isOnline={isOnline}
-                error={draftError}
-              />
-            </div>
-          )}
-          
           {/* Basic Information Step */}
           {currentStep === 'basic' && (
             <div className="space-y-6">
@@ -1305,7 +1195,7 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
                   Tournament URL Preview
                 </h4>
                 <div className="text-white font-jetbrains mb-2 text-lg">
-                  https://direktorweb.site/tournaments/{generateTournamentSlug(formData.name)}
+                  https://direktorweb.com/tournaments/{generateTournamentSlug(formData.name)}
                 </div>
                 <div className="text-gray-300 font-jetbrains text-sm">
                   This is how your tournament URL will appear when shared. The URL is based on your tournament name.
