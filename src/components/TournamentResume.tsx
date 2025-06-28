@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, FolderOpen, Trash2, Calendar, MapPin, Users, Trophy, Clock, ArrowRight, Target, Filter, Search, X, Download } from 'lucide-react';
+import { Plus, FolderOpen, Trash2, Calendar, MapPin, Users, Trophy, Clock, ArrowRight, Target, FileText } from 'lucide-react';
 import ParticleBackground from './ParticleBackground';
 import Button from './Button';
 import { supabase } from '../lib/supabase';
 import { Tournament } from '../types/database';
+import { useTournamentDrafts, TournamentDraft } from '../hooks/useTournamentDrafts';
+import DraftManager from './TournamentDrafts/DraftManager';
 
 interface TournamentResumeProps {
   onNewTournament: () => void;
@@ -24,58 +26,14 @@ const TournamentResume: React.FC<TournamentResumeProps> = ({
 }) => {
   const navigate = useNavigate();
   const [tournaments, setTournaments] = useState<TournamentWithStats[]>([]);
-  const [filteredTournaments, setFilteredTournaments] = useState<TournamentWithStats[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<'recent' | 'name' | 'date'>('recent');
+  const { drafts } = useTournamentDrafts();
 
   useEffect(() => {
     loadDirectorTournaments();
   }, []);
-
-  useEffect(() => {
-    // Apply filters and sorting whenever tournaments, search query, or filters change
-    let filtered = [...tournaments];
-    
-    // Apply search filter
-    if (searchQuery) {
-      filtered = filtered.filter(tournament => 
-        tournament.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        tournament.venue?.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
-    
-    // Apply status filter
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(tournament => tournament.status === statusFilter);
-    }
-    
-    // Apply sorting
-    switch (sortBy) {
-      case 'name':
-        filtered.sort((a, b) => a.name.localeCompare(b.name));
-        break;
-      case 'date':
-        filtered.sort((a, b) => {
-          if (!a.date) return 1;
-          if (!b.date) return -1;
-          return new Date(b.date).getTime() - new Date(a.date).getTime();
-        });
-        break;
-      case 'recent':
-      default:
-        filtered.sort((a, b) => {
-          const aTime = new Date(a.last_activity || a.created_at).getTime();
-          const bTime = new Date(b.last_activity || b.created_at).getTime();
-          return bTime - aTime;
-        });
-    }
-    
-    setFilteredTournaments(filtered);
-  }, [tournaments, searchQuery, statusFilter, sortBy]);
 
   const loadDirectorTournaments = async () => {
     try {
@@ -132,7 +90,6 @@ const TournamentResume: React.FC<TournamentResumeProps> = ({
       );
 
       setTournaments(tournamentsWithStats);
-      setFilteredTournaments(tournamentsWithStats);
     } catch (err) {
       console.error('Error loading tournaments:', err);
       setError('Failed to load your tournaments');
@@ -175,27 +132,15 @@ const TournamentResume: React.FC<TournamentResumeProps> = ({
       // Reload tournaments
       await loadDirectorTournaments();
       setDeleteConfirm(null);
-      
-      // Show success toast
-      const toast = document.createElement('div');
-      toast.className = 'fixed top-4 right-4 z-50 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg font-jetbrains text-sm border border-green-500/50';
-      toast.innerHTML = `
-        <div class="flex items-center gap-2">
-          <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-          Tournament deleted successfully
-        </div>
-      `;
-      document.body.appendChild(toast);
-      
-      setTimeout(() => {
-        if (document.body.contains(toast)) {
-          document.body.removeChild(toast);
-        }
-      }, 3000);
     } catch (err) {
       console.error('Error deleting tournament:', err);
       setError('Failed to delete tournament');
     }
+  };
+
+  const handleResumeDraft = (draft: TournamentDraft) => {
+    // Open tournament setup modal with draft data
+    onNewTournament();
   };
 
   const getStatusBadge = (tournament: TournamentWithStats) => {
@@ -237,31 +182,6 @@ const TournamentResume: React.FC<TournamentResumeProps> = ({
     if (diffDays < 7) return `${diffDays}d ago`;
     return date.toLocaleDateString();
   };
-  
-  const handleExportTournaments = () => {
-    const headers = ['Name', 'Date', 'Venue', 'Status', 'Players', 'Rounds', 'Last Activity'];
-    const rows = tournaments.map(t => [
-      t.name,
-      t.date || 'N/A',
-      t.venue || 'N/A',
-      t.status || 'N/A',
-      t.player_count.toString(),
-      `${t.completed_rounds}/${t.rounds || 7}`,
-      formatLastActivity(t.last_activity || t.created_at)
-    ]);
-
-    const csvContent = [headers, ...rows]
-      .map(row => row.map(cell => `"${cell}"`).join(','))
-      .join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Tournaments_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
 
   if (isLoading) {
     return (
@@ -277,7 +197,7 @@ const TournamentResume: React.FC<TournamentResumeProps> = ({
       
       <div className="relative z-10 min-h-screen flex flex-col px-4 py-8">
         {/* Header */}
-        <div className="text-center mb-8 max-w-6xl mx-auto">
+        <div className="text-center mb-12 max-w-6xl mx-auto">
           <h1 className="glitch-text fade-up text-4xl md:text-6xl font-bold mb-4 text-white font-orbitron tracking-wider"
               data-text="YOUR TOURNAMENTS">
             📋 YOUR TOURNAMENTS
@@ -303,75 +223,6 @@ const TournamentResume: React.FC<TournamentResumeProps> = ({
           </div>
         )}
 
-        {/* Search and Filter Controls */}
-        <div className="fade-up fade-up-delay-4 max-w-6xl mx-auto w-full mb-8">
-          <div className="bg-gray-900/50 border border-gray-700 rounded-xl p-4 backdrop-blur-sm">
-            <div className="flex flex-col md:flex-row gap-4">
-              {/* Search */}
-              <div className="flex-1 relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search tournaments..."
-                  className="block w-full pl-10 pr-10 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 font-jetbrains"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery('')}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                )}
-              </div>
-              
-              {/* Status Filter */}
-              <div className="flex items-center gap-2">
-                <Filter className="h-5 w-5 text-gray-400" />
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="bg-gray-800/50 border border-gray-600 rounded-lg px-3 py-2 text-white font-jetbrains focus:border-blue-500 focus:outline-none appearance-none"
-                >
-                  <option value="all">All Statuses</option>
-                  <option value="setup">Setup</option>
-                  <option value="registration">Registration</option>
-                  <option value="active">Active</option>
-                  <option value="completed">Completed</option>
-                  <option value="paused">Paused</option>
-                </select>
-              </div>
-              
-              {/* Sort By */}
-              <div className="flex items-center gap-2">
-                <span className="text-gray-400">Sort:</span>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as 'recent' | 'name' | 'date')}
-                  className="bg-gray-800/50 border border-gray-600 rounded-lg px-3 py-2 text-white font-jetbrains focus:border-blue-500 focus:outline-none appearance-none"
-                >
-                  <option value="recent">Recent Activity</option>
-                  <option value="name">Name</option>
-                  <option value="date">Date</option>
-                </select>
-              </div>
-              
-              {/* Export Button */}
-              <button
-                onClick={handleExportTournaments}
-                className="flex items-center gap-2 px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700/50 transition-all duration-200 font-jetbrains text-sm"
-              >
-                <Download className="h-4 w-4" />
-                Export CSV
-              </button>
-            </div>
-          </div>
-        </div>
-
         {/* New Tournament Button */}
         <div className="fade-up fade-up-delay-4 max-w-6xl mx-auto w-full mb-8">
           <Button
@@ -383,140 +234,162 @@ const TournamentResume: React.FC<TournamentResumeProps> = ({
           />
         </div>
 
+        {/* Draft Manager */}
+        {drafts.length > 0 && (
+          <div className="fade-up fade-up-delay-4 max-w-6xl mx-auto w-full mb-8">
+            <DraftManager 
+              onNewTournament={onNewTournament}
+              onResumeDraft={handleResumeDraft}
+            />
+          </div>
+        )}
+
         {/* Tournaments List */}
-        {filteredTournaments.length > 0 ? (
+        {tournaments.length > 0 ? (
           <div className="fade-up fade-up-delay-5 max-w-6xl mx-auto w-full mb-8">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {filteredTournaments.map((tournament) => {
-                const statusBadge = getStatusBadge(tournament);
-                const progressPercentage = getProgressPercentage(tournament);
-                
-                return (
-                  <div
-                    key={tournament.id}
-                    className="bg-gray-900/50 border border-gray-700 rounded-xl p-6 backdrop-blur-sm hover:bg-gray-800/50 transition-all duration-300"
-                  >
-                    {/* Tournament Header */}
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex-1">
-                        <h3 className="text-xl font-bold text-white font-orbitron mb-2">
-                          {tournament.name}
-                        </h3>
-                        
-                        <div className="flex items-center gap-4 text-sm text-gray-400 mb-3">
-                          {tournament.date && (
-                            <div className="flex items-center gap-1">
-                              <Calendar size={14} />
-                              <span className="font-jetbrains">
-                                {new Date(tournament.date).toLocaleDateString()}
-                              </span>
-                            </div>
-                          )}
+            <div className="bg-gray-900/50 border border-gray-700 rounded-xl p-6 backdrop-blur-sm mb-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-blue-500 rounded-lg flex items-center justify-center">
+                  <Trophy className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-white font-orbitron">Active Tournaments</h3>
+                  <p className="text-gray-400 font-jetbrains text-sm">Your created tournaments</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {tournaments.map((tournament) => {
+                  const statusBadge = getStatusBadge(tournament);
+                  const progressPercentage = getProgressPercentage(tournament);
+                  
+                  return (
+                    <div
+                      key={tournament.id}
+                      className="bg-gray-900/50 border border-gray-700 rounded-xl p-6 backdrop-blur-sm hover:bg-gray-800/50 transition-all duration-300"
+                    >
+                      {/* Tournament Header */}
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex-1">
+                          <h3 className="text-xl font-bold text-white font-orbitron mb-2">
+                            {tournament.name}
+                          </h3>
                           
-                          {tournament.venue && (
-                            <div className="flex items-center gap-1">
-                              <MapPin size={14} />
-                              <span className="font-jetbrains">{tournament.venue}</span>
-                            </div>
-                          )}
+                          <div className="flex items-center gap-4 text-sm text-gray-400 mb-3">
+                            {tournament.date && (
+                              <div className="flex items-center gap-1">
+                                <Calendar size={14} />
+                                <span className="font-jetbrains">
+                                  {new Date(tournament.date).toLocaleDateString()}
+                                </span>
+                              </div>
+                            )}
+                            
+                            {tournament.venue && (
+                              <div className="flex items-center gap-1">
+                                <MapPin size={14} />
+                                <span className="font-jetbrains">{tournament.venue}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className={`px-3 py-1 rounded-lg border text-xs font-jetbrains ${statusBadge.color}`}>
+                          {statusBadge.text}
                         </div>
                       </div>
-                      
-                      <div className={`px-3 py-1 rounded-lg border text-xs font-jetbrains ${statusBadge.color}`}>
-                        {statusBadge.text}
-                      </div>
-                    </div>
 
-                    {/* Progress Bar */}
-                    <div className="mb-4">
-                      <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
-                        <span className="font-jetbrains">
-                          Round {tournament.completed_rounds} of {tournament.rounds || 7}
-                        </span>
-                        <span className="font-jetbrains">{Math.round(progressPercentage)}%</span>
+                      {/* Progress Bar */}
+                      <div className="mb-4">
+                        <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
+                          <span className="font-jetbrains">
+                            Round {tournament.completed_rounds} of {tournament.rounds || 7}
+                          </span>
+                          <span className="font-jetbrains">{Math.round(progressPercentage)}%</span>
+                        </div>
+                        <div className="w-full bg-gray-800 rounded-full h-2">
+                          <div 
+                            className="bg-gradient-to-r from-blue-500 to-cyan-500 h-2 rounded-full transition-all duration-500"
+                            style={{ width: `${progressPercentage}%` }}
+                          />
+                        </div>
                       </div>
-                      <div className="w-full bg-gray-800 rounded-full h-2">
-                        <div 
-                          className="bg-gradient-to-r from-blue-500 to-cyan-500 h-2 rounded-full transition-all duration-500"
-                          style={{ width: `${progressPercentage}%` }}
-                        />
-                      </div>
-                    </div>
 
-                    {/* Tournament Stats */}
-                    <div className="grid grid-cols-3 gap-4 mb-6">
-                      <div className="text-center">
-                        <div className="flex items-center justify-center gap-1 text-blue-400 mb-1">
-                          <Users size={16} />
+                      {/* Tournament Stats */}
+                      <div className="grid grid-cols-3 gap-4 mb-6">
+                        <div className="text-center">
+                          <div className="flex items-center justify-center gap-1 text-blue-400 mb-1">
+                            <Users size={16} />
+                          </div>
+                          <div className="text-lg font-bold text-white font-orbitron">
+                            {tournament.player_count}
+                          </div>
+                          <div className="text-xs text-gray-400 font-jetbrains">Players</div>
                         </div>
-                        <div className="text-lg font-bold text-white font-orbitron">
-                          {tournament.player_count}
+                        
+                        <div className="text-center">
+                          <div className="flex items-center justify-center gap-1 text-green-400 mb-1">
+                            <Trophy size={16} />
+                          </div>
+                          <div className="text-lg font-bold text-white font-orbitron">
+                            {tournament.completed_results}
+                          </div>
+                          <div className="text-xs text-gray-400 font-jetbrains">Games</div>
                         </div>
-                        <div className="text-xs text-gray-400 font-jetbrains">Players</div>
+                        
+                        <div className="text-center">
+                          <div className="flex items-center justify-center gap-1 text-purple-400 mb-1">
+                            <Clock size={16} />
+                          </div>
+                          <div className="text-lg font-bold text-white font-orbitron">
+                            {formatLastActivity(tournament.last_activity || tournament.created_at)}
+                          </div>
+                          <div className="text-xs text-gray-400 font-jetbrains">Last Active</div>
+                        </div>
                       </div>
-                      
-                      <div className="text-center">
-                        <div className="flex items-center justify-center gap-1 text-green-400 mb-1">
-                          <Trophy size={16} />
-                        </div>
-                        <div className="text-lg font-bold text-white font-orbitron">
-                          {tournament.completed_results}
-                        </div>
-                        <div className="text-xs text-gray-400 font-jetbrains">Games</div>
-                      </div>
-                      
-                      <div className="text-center">
-                        <div className="flex items-center justify-center gap-1 text-purple-400 mb-1">
-                          <Clock size={16} />
-                        </div>
-                        <div className="text-lg font-bold text-white font-orbitron">
-                          {formatLastActivity(tournament.last_activity || tournament.created_at)}
-                        </div>
-                        <div className="text-xs text-gray-400 font-jetbrains">Last Active</div>
-                      </div>
-                    </div>
 
-                    {/* Action Buttons */}
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => handleOpenControlCenter(tournament.id)}
-                        className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg font-jetbrains font-medium transition-all duration-200"
-                      >
-                        <Target size={16} />
-                        Control Center
-                      </button>
-                      
-                      <button
-                        onClick={() => handleResumeTournament(tournament)}
-                        className="flex items-center justify-center gap-2 px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-jetbrains font-medium transition-all duration-200"
-                      >
-                        <Plus size={16} />
-                        Resume
-                      </button>
-                      
-                      <button
-                        onClick={() => handleViewTournament(tournament)}
-                        className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-jetbrains font-medium transition-all duration-200"
-                      >
-                        <FolderOpen size={16} />
-                        View
-                      </button>
-                      
-                      <button
-                        onClick={() => handleDeleteTournament(tournament.id)}
-                        className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-jetbrains font-medium transition-all duration-200 ${
-                          deleteConfirm === tournament.id
-                            ? 'bg-red-700 text-white animate-pulse'
-                            : 'bg-red-600/20 border border-red-500/50 text-red-400 hover:bg-red-600 hover:text-white'
-                        }`}
-                      >
-                        <Trash2 size={16} />
-                        {deleteConfirm === tournament.id ? 'Confirm' : 'Delete'}
-                      </button>
+                      {/* Action Buttons */}
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => handleOpenControlCenter(tournament.id)}
+                          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg font-jetbrains font-medium transition-all duration-200"
+                        >
+                          <Target size={16} />
+                          Control Center
+                        </button>
+                        
+                        <button
+                          onClick={() => handleResumeTournament(tournament)}
+                          className="flex items-center justify-center gap-2 px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-jetbrains font-medium transition-all duration-200"
+                        >
+                          <Plus size={16} />
+                          Resume
+                        </button>
+                        
+                        <button
+                          onClick={() => handleViewTournament(tournament)}
+                          className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-jetbrains font-medium transition-all duration-200"
+                        >
+                          <FolderOpen size={16} />
+                          View
+                        </button>
+                        
+                        <button
+                          onClick={() => handleDeleteTournament(tournament.id)}
+                          className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-jetbrains font-medium transition-all duration-200 ${
+                            deleteConfirm === tournament.id
+                              ? 'bg-red-700 text-white animate-pulse'
+                              : 'bg-red-600/20 border border-red-500/50 text-red-400 hover:bg-red-600 hover:text-white'
+                          }`}
+                        >
+                          <Trash2 size={16} />
+                          {deleteConfirm === tournament.id ? 'Confirm' : 'Delete'}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
         ) : (
@@ -524,34 +397,18 @@ const TournamentResume: React.FC<TournamentResumeProps> = ({
             <div className="bg-gray-900/50 border border-gray-700 rounded-xl p-12 text-center backdrop-blur-sm">
               <Trophy className="w-16 h-16 text-gray-500 mx-auto mb-4" />
               <h3 className="text-xl font-bold text-white font-orbitron mb-2">
-                {searchQuery || statusFilter !== 'all' 
-                  ? 'No tournaments match your filters' 
-                  : 'No Tournaments Yet'}
+                No Tournaments Yet
               </h3>
               <p className="text-gray-400 font-jetbrains mb-6">
-                {searchQuery || statusFilter !== 'all'
-                  ? 'Try adjusting your search or filters'
-                  : 'Create your first tournament to get started'}
+                Create your first tournament to get started
               </p>
-              {(searchQuery || statusFilter !== 'all') ? (
-                <button
-                  onClick={() => {
-                    setSearchQuery('');
-                    setStatusFilter('all');
-                  }}
-                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-jetbrains font-medium transition-all duration-200"
-                >
-                  Clear Filters
-                </button>
-              ) : (
-                <Button
-                  icon={ArrowRight}
-                  label="Create First Tournament"
-                  onClick={onNewTournament}
-                  variant="green"
-                  className="max-w-sm mx-auto"
-                />
-              )}
+              <Button
+                icon={ArrowRight}
+                label="Create First Tournament"
+                onClick={onNewTournament}
+                variant="green"
+                className="max-w-sm mx-auto"
+              />
             </div>
           </div>
         )}
