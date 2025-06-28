@@ -284,7 +284,8 @@ James Rodriguez, 1856`;
         name: player.name,
         rating: player.rating,
         tournament_id: tournamentId,
-        team_name: isTeamMode ? player.team_name : undefined
+        team_name: isTeamMode ? player.team_name : undefined,
+        participation_status: 'active'
       }));
 
       await retrySupabaseOperation(async () => {
@@ -561,6 +562,7 @@ James Rodriguez, 1856`;
               <ArrowLeft size={20} />
               <span className="font-jetbrains">← Back to Dashboard</span>
             </button>
+            
             <div className="flex items-center gap-4">
               {/* Team Manager Button (Team Mode Only) */}
               {isTeamMode && (
@@ -675,39 +677,6 @@ James Rodriguez, 1856`;
           </div>
         )}
 
-        {/* Team Mode Banner */}
-        {isTeamMode && currentStep === 'player-registration' && (
-          <div className="max-w-6xl mx-auto w-full mb-8">
-            <div className="bg-blue-900/20 border border-blue-500/30 rounded-xl p-6 backdrop-blur-sm">
-              <div className="flex items-center gap-2 mb-2">
-                <UserCheck className="w-5 h-5 text-blue-400" />
-                <span className="text-blue-300 font-jetbrains font-medium">Team Mode Active</span>
-              </div>
-              <p className="text-gray-300 font-jetbrains text-sm mb-3">
-                This tournament uses team-based competition. Each player must be assigned to a team.
-              </p>
-              <p className="text-blue-200 font-jetbrains text-xs">
-                Format: Player Name, Rating ; ; team TeamName
-              </p>
-              {teams.length > 0 && (
-                <div className="mt-4">
-                  <p className="text-blue-300 font-jetbrains text-sm mb-2">Available teams:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {teams.map(team => (
-                      <span
-                        key={team.id}
-                        className="inline-flex items-center px-2 py-1 bg-blue-500/20 border border-blue-500/50 text-blue-300 rounded text-xs font-jetbrains"
-                      >
-                        {team.name}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
         {/* Public Link Sharing Section */}
         {publicUrl && (
           <div className="max-w-6xl mx-auto w-full mb-8">
@@ -757,6 +726,39 @@ James Rodriguez, 1856`;
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Team Mode Banner */}
+        {isTeamMode && currentStep === 'player-registration' && (
+          <div className="max-w-6xl mx-auto w-full mb-8">
+            <div className="bg-blue-900/20 border border-blue-500/30 rounded-xl p-6 backdrop-blur-sm">
+              <div className="flex items-center gap-2 mb-2">
+                <UserCheck className="w-5 h-5 text-blue-400" />
+                <span className="text-blue-300 font-jetbrains font-medium">Team Mode Active</span>
+              </div>
+              <p className="text-gray-300 font-jetbrains text-sm mb-3">
+                This tournament uses team-based competition. Each player must be assigned to a team.
+              </p>
+              <p className="text-blue-200 font-jetbrains text-xs">
+                Format: Player Name, Rating ; ; team TeamName
+              </p>
+              {teams.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-blue-300 font-jetbrains text-sm mb-2">Available teams:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {teams.map(team => (
+                      <span
+                        key={team.id}
+                        className="inline-flex items-center px-2 py-1 bg-blue-500/20 border border-blue-500/50 text-blue-300 rounded text-xs font-jetbrains"
+                      >
+                        {team.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -860,7 +862,7 @@ James Rodriguez, 1856`;
                   {error.includes('connection') && (
                     <button
                       onClick={handleRetryConnection}
-                      className="flex items-center gap-1 px-3 py-1 bg-red-600/20 border border-red-500/50 text-red-400 hover:bg-red-600/30 rounded text-xs font-jetbrains transition-all duration-200"
+                      className="flex items-center gap-1 px-3 py-1 bg-red-600/20 border border-red-500/50 rounded text-red-200 hover:bg-red-600/30 transition-colors duration-200"
                     >
                       <RefreshCw size={12} />
                       Retry
@@ -912,6 +914,26 @@ James Rodriguez, 1856`;
             </div>
           )}
 
+          {/* Team Mode - No Players Warning */}
+          {isTeamMode && currentStep === 'player-registration' && !showPreview && !hasRegisteredPlayers && (
+            <div className="fade-up mb-8">
+              <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-xl p-6 text-center">
+                <div className="flex items-center justify-center gap-2 mb-4">
+                  <AlertTriangle className="w-6 h-6 text-yellow-400" />
+                  <span className="text-yellow-400 font-orbitron font-bold text-lg">
+                    Player Registration Required
+                  </span>
+                </div>
+                <p className="text-gray-300 font-jetbrains mb-4">
+                  You must register at least one player for each team before proceeding to the tournament control center.
+                </p>
+                <p className="text-yellow-300 font-jetbrains text-sm">
+                  Enter player details in the format: <span className="font-bold">Name, Rating ; ; team TeamName</span>
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Action Buttons */}
           {showPreview && validPlayerCount > 0 && (
             <div className="fade-up text-center mb-8">
@@ -938,26 +960,6 @@ James Rodriguez, 1856`;
             </div>
           )}
 
-          {/* Team Mode - No Players Warning */}
-          {isTeamMode && currentStep === 'player-registration' && !showPreview && !hasRegisteredPlayers && (
-            <div className="fade-up mb-8">
-              <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-xl p-6 text-center">
-                <div className="flex items-center justify-center gap-2 mb-4">
-                  <AlertTriangle className="w-6 h-6 text-yellow-400" />
-                  <span className="text-yellow-400 font-orbitron font-bold text-lg">
-                    Player Registration Required
-                  </span>
-                </div>
-                <p className="text-gray-300 font-jetbrains mb-4">
-                  You must register at least one player for each team before proceeding to the tournament control center.
-                </p>
-                <p className="text-yellow-300 font-jetbrains text-sm">
-                  Enter player details in the format: <span className="font-bold">Name, Rating ; ; team TeamName</span>
-                </p>
-              </div>
-            </div>
-          )}
-
           {/* Tournament Dashboard Button */}
           {(allDivisionsCompleted || (hasRegisteredPlayers && !isTeamMode)) && (
             <div className="fade-up text-center mb-8">
@@ -969,7 +971,7 @@ James Rodriguez, 1856`;
                   </span>
                 </div>
                 <p className="text-gray-300 font-jetbrains">
-                  All {isTeamMode ? 'teams' : 'players'} have been registered. Ready to proceed to tournament management.
+                  {isTeamMode ? 'All teams have been registered. Ready to proceed to tournament management.' : 'All players have been registered. Ready to proceed to tournament management.'}
                 </p>
               </div>
               
