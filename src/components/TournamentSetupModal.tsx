@@ -212,68 +212,115 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
   
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
 
-  // Load draft if draftId is provided
+  // Initialize or load draft
   useEffect(() => {
-    if (isOpen && draftId) {
-      loadDraftData(draftId);
-    } else if (isOpen) {
-      // Create a new draft when modal opens
-      initializeNewDraft();
+    if (isOpen) {
+      if (draftId) {
+        // Load existing draft
+        loadExistingDraft(draftId);
+      } else {
+        // Create new draft
+        initializeNewDraft();
+      }
     }
   }, [isOpen, draftId]);
-
-  const loadDraftData = async (id: string) => {
+  
+  // Save draft when form data changes
+  useEffect(() => {
+    if (currentDraftId && isOpen) {
+      const draftData = {
+        ...formData,
+        wizardResponses,
+        selectedPairingFormat,
+        recommendedSystem,
+        recommendationReasoning,
+        currentStep,
+        wizardStepIndex,
+        step: getCurrentStepName()
+      };
+      
+      updateDraft(currentDraftId, draftData);
+    }
+  }, [formData, wizardResponses, selectedPairingFormat, currentStep, wizardStepIndex]);
+  
+  const getCurrentStepName = (): string => {
+    switch (currentStep) {
+      case 'basic': return 'Basic Information';
+      case 'pairing-method': return 'Pairing Method Selection';
+      case 'wizard': return `Pairing Wizard (${wizardStepIndex + 1}/${WIZARD_STEPS.length})`;
+      case 'manual-selection': return 'Manual Pairing Selection';
+      case 'review': return 'Review & Create';
+      default: return 'Tournament Setup';
+    }
+  };
+  
+  const loadExistingDraft = async (id: string) => {
     try {
       setIsLoading(true);
       const draft = await loadDraft(id);
       
-      if (draft && draft.data) {
-        // Set form data from draft
-        setFormData({
-          name: draft.data.name || '',
-          date: draft.data.date || '',
-          venue: draft.data.venue || '',
-          rounds: draft.data.rounds || 7,
-          divisions: draft.data.divisions || 1,
-          divisionNames: draft.data.divisionNames || ['Main Division'],
-          teamMode: draft.data.teamMode || false,
-          isPasswordProtected: draft.data.isPasswordProtected || false,
-          password: draft.data.password || '',
-          publicSharingEnabled: draft.data.publicSharingEnabled !== false,
-          showPassword: false
-        });
+      if (draft) {
+        // Restore form data
+        if (draft.data.name) {
+          setFormData({
+            name: draft.data.name || '',
+            date: draft.data.date || '',
+            venue: draft.data.venue || '',
+            rounds: draft.data.rounds || 7,
+            divisions: draft.data.divisions || 1,
+            divisionNames: draft.data.divisionNames || ['Main Division'],
+            teamMode: draft.data.teamMode || false,
+            isPasswordProtected: draft.data.isPasswordProtected || false,
+            password: draft.data.password || '',
+            publicSharingEnabled: draft.data.publicSharingEnabled !== false,
+            showPassword: false
+          });
+        }
         
-        // Set wizard responses if available
+        // Restore wizard state
         if (draft.data.wizardResponses) {
           setWizardResponses(draft.data.wizardResponses);
         }
         
-        // Set pairing format if available
+        // Restore pairing format
         if (draft.data.selectedPairingFormat) {
           setSelectedPairingFormat(draft.data.selectedPairingFormat);
         }
         
-        // Set recommended system if available
         if (draft.data.recommendedSystem) {
           setRecommendedSystem(draft.data.recommendedSystem);
-          setRecommendationReasoning(draft.data.recommendationReasoning || '');
         }
         
-        // Set current step if available
+        if (draft.data.recommendationReasoning) {
+          setRecommendationReasoning(draft.data.recommendationReasoning);
+        }
+        
+        // Restore current step
         if (draft.data.currentStep) {
           setCurrentStep(draft.data.currentStep);
         }
         
-        // Set wizard step index if available
         if (draft.data.wizardStepIndex !== undefined) {
           setWizardStepIndex(draft.data.wizardStepIndex);
         }
         
         setCurrentDraftId(id);
+        
+        // Log draft loaded
+        logAction({
+          action: 'tournament_draft_loaded',
+          details: {
+            draft_id: id,
+            draft_name: draft.name || 'Untitled Tournament'
+          }
+        });
       }
     } catch (err) {
       console.error('Error loading draft:', err);
-      setError('Failed to load draft data');
+      setError('Failed to load draft. Starting with a new tournament.');
+      
+      // Create new draft as fallback
+      initializeNewDraft();
     } finally {
       setIsLoading(false);
     }
@@ -281,70 +328,26 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
   
   const initializeNewDraft = async () => {
     try {
-      // Create a new draft with initial data
+      // Create a new draft
       const newDraftId = await createDraft({
         name: 'New Tournament',
-        step: 'basic-info'
+        step: 'Basic Information'
       });
       
       if (newDraftId) {
         setCurrentDraftId(newDraftId);
+        
+        // Log new draft created
+        logAction({
+          action: 'tournament_draft_created',
+          details: {
+            draft_id: newDraftId
+          }
+        });
       }
     } catch (err) {
-      console.error('Error creating new draft:', err);
-    }
-  };
-  
-  // Update draft when form data changes
-  useEffect(() => {
-    if (currentDraftId) {
-      updateDraftData();
-    }
-  }, [formData, wizardResponses, selectedPairingFormat, recommendedSystem, currentStep, wizardStepIndex]);
-  
-  const updateDraftData = () => {
-    if (!currentDraftId) return;
-    
-    // Determine checkpoint based on current step
-    let checkpoint: string | undefined;
-    if (currentStep === 'basic' && formData.name && formData.date) {
-      checkpoint = 'basicInfo';
-    } else if (currentStep === 'pairing-method') {
-      checkpoint = 'pairingMethod';
-    } else if (currentStep === 'review') {
-      checkpoint = 'review';
-    }
-    
-    // Update draft with current state
-    updateDraft(currentDraftId, {
-      name: formData.name || 'New Tournament',
-      date: formData.date,
-      venue: formData.venue,
-      rounds: formData.rounds,
-      divisions: formData.divisions,
-      divisionNames: formData.divisionNames,
-      teamMode: formData.teamMode,
-      isPasswordProtected: formData.isPasswordProtected,
-      password: formData.password,
-      publicSharingEnabled: formData.publicSharingEnabled,
-      wizardResponses,
-      selectedPairingFormat,
-      recommendedSystem,
-      recommendationReasoning,
-      currentStep,
-      wizardStepIndex,
-      step: getCurrentStepLabel()
-    }, checkpoint);
-  };
-  
-  const getCurrentStepLabel = (): string => {
-    switch (currentStep) {
-      case 'basic': return 'Basic Info';
-      case 'pairing-method': return 'Pairing Method';
-      case 'wizard': return 'Pairing Wizard';
-      case 'manual-selection': return 'Pairing Selection';
-      case 'review': return 'Review';
-      default: return 'Setup';
+      console.error('Error creating draft:', err);
+      // Continue without draft functionality
     }
   };
 
@@ -411,8 +414,22 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
         setRecommendedSystem('team-round-robin');
         setRecommendationReasoning('Team Round-Robin is automatically selected for team-based tournaments, ensuring each team plays every other team with all possible player matchups.');
         setCurrentStep('review');
+        
+        // Save checkpoint
+        if (currentDraftId) {
+          updateDraft(currentDraftId, {
+            selectedPairingFormat: 'team-round-robin',
+            recommendedSystem: 'team-round-robin',
+            recommendationReasoning: 'Team Round-Robin is automatically selected for team-based tournaments, ensuring each team plays every other team with all possible player matchups.'
+          }, 'pairingMethod');
+        }
       } else {
         setCurrentStep('pairing-method');
+        
+        // Save checkpoint
+        if (currentDraftId) {
+          updateDraft(currentDraftId, {}, 'basicInfo');
+        }
       }
     }
   };
@@ -429,6 +446,11 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
           tournament_name: formData.name
         }
       });
+      
+      // Save checkpoint
+      if (currentDraftId) {
+        updateDraft(currentDraftId, {}, 'pairingMethod');
+      }
     } else {
       setCurrentStep('manual-selection');
       
@@ -439,6 +461,11 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
           tournament_name: formData.name
         }
       });
+      
+      // Save checkpoint
+      if (currentDraftId) {
+        updateDraft(currentDraftId, {}, 'pairingMethod');
+      }
     }
   };
 
@@ -475,6 +502,13 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
           responses: updatedResponses
         }
       });
+      
+      // Save checkpoint
+      if (currentDraftId) {
+        updateDraft(currentDraftId, {
+          wizardResponses: updatedResponses
+        }, 'wizardCompleted');
+      }
     }
   };
 
@@ -492,6 +526,15 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
         selection_method: 'manual'
       }
     });
+    
+    // Save checkpoint
+    if (currentDraftId) {
+      updateDraft(currentDraftId, {
+        selectedPairingFormat: format,
+        recommendedSystem: format,
+        recommendationReasoning: `You manually selected ${format.charAt(0).toUpperCase() + format.slice(1).replace('-', ' ')} as your preferred pairing system.`
+      }, 'manualSelection');
+    }
   };
 
   const generateRecommendation = (responses: Partial<WizardResponses>) => {
@@ -664,6 +707,15 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
       // Mark draft as completed
       if (currentDraftId) {
         await completeDraft(currentDraftId, tournament.id);
+        
+        // Log draft completion
+        logAction({
+          action: 'tournament_draft_completed',
+          details: {
+            draft_id: currentDraftId,
+            tournament_id: tournament.id
+          }
+        });
       }
 
       // Success! Call the success callback with tournament ID
