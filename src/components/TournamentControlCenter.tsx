@@ -139,6 +139,15 @@ const TournamentControlCenter: React.FC = () => {
     setActiveTab('rounds');
   };
 
+  // Navigation handlers for RoundManager
+  const handleRoundManagerBack = () => {
+    setActiveTab('players');
+  };
+
+  const handleRoundManagerNext = () => {
+    setActiveTab('scores');
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
@@ -252,7 +261,11 @@ const TournamentControlCenter: React.FC = () => {
       case 'rounds':
         return (
           <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" /></div>}>
-            <RoundManager {...commonProps} />
+            <RoundManager 
+              {...commonProps}
+              onBack={handleRoundManagerBack}
+              onNext={handleRoundManagerNext}
+            />
           </Suspense>
         );
       case 'scores':
