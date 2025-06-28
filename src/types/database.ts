@@ -6,6 +6,8 @@ export interface Player {
   team_name?: string; // Added for team mode
   created_at?: string;
   participation_status?: 'active' | 'paused' | 'withdrawn'; // Added for player participation management
+  paused_at?: string;
+  pause_reason?: string;
 }
 
 export interface Tournament {
