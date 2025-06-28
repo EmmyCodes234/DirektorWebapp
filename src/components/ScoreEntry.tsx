@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Mic, Trophy, Save, MicOff, Edit3, AlertTriangle, History, X, Check, RefreshCw } from 'lucide-react';
 import ParticleBackground from './ParticleBackground';
 import Button from './Button';
-import { supabase } from '../lib/supabase';
+import { supabase, handleSupabaseError, retrySupabaseOperation } from '../lib/supabase';
 import { useAuditLog } from '../hooks/useAuditLog';
 import { Tournament, PairingWithPlayers, Result } from '../types/database';
 
@@ -55,14 +55,19 @@ const ScoreEntry: React.FC<ScoreEntryProps> = ({
   const [selectedPastRound, setSelectedPastRound] = useState<number | null>(null);
   const [pastRoundScores, setPastRoundScores] = useState<Record<string, ScoreInput>>({});
   const [isEditingPastRound, setIsEditingPastRound] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   
   const { logAction } = useAuditLog();
   const scoreInputRefs = useRef<Record<string, HTMLInputElement>>({});
 
   useEffect(() => {
-    loadData();
-    initializeSpeechRecognition();
-    loadPastRounds();
+    if (currentRound !== undefined && currentRound !== null) {
+      loadData();
+      initializeSpeechRecognition();
+      loadPastRounds();
+    } else {
+      setError("Current round is undefined. Please select a valid round.");
+    }
   }, [tournamentId, currentRound]);
   
   useEffect(() => {
@@ -120,46 +125,82 @@ const ScoreEntry: React.FC<ScoreEntryProps> = ({
     return null;
   };
 
+  const checkConnection = async () => {
+    try {
+      // Simple connection test
+      const { data, error } = await supabase
+        .from('tournaments')
+        .select('id')
+        .limit(1);
+        
+      if (error) {
+        setConnectionError(`Database connection failed: ${error.message}`);
+        return false;
+      }
+      
+      setConnectionError(null);
+      return true;
+    } catch (err: any) {
+      setConnectionError(`Connection error: ${err.message}`);
+      return false;
+    }
+  };
+
   const loadData = async () => {
     try {
       setIsLoading(true);
+      setError(null);
+      
+      // Check connection
+      const isConnected = await checkConnection();
+      if (!isConnected) return;
       
       // Load tournament
-      const { data: tournamentData, error: tournamentError } = await supabase
-        .from('tournaments')
-        .select('*')
-        .eq('id', tournamentId)
-        .single();
+      const tournamentData = await retrySupabaseOperation(async () => {
+        const { data, error } = await supabase
+          .from('tournaments')
+          .select('*')
+          .eq('id', tournamentId)
+          .single();
 
-      if (tournamentError) throw tournamentError;
+        if (error) throw error;
+        return data;
+      });
+
       setTournament(tournamentData);
 
       // Load pairings with player details
-      const { data: pairingsData, error: pairingsError } = await supabase
-        .from('pairings')
-        .select(`
-          *,
-          player1:players!pairings_player1_id_fkey(id, name, rating),
-          player2:players!pairings_player2_id_fkey(id, name, rating)
-        `)
-        .eq('tournament_id', tournamentId)
-        .eq('round_number', currentRound)
-        .order('table_number');
+      const pairingsData = await retrySupabaseOperation(async () => {
+        const { data, error } = await supabase
+          .from('pairings')
+          .select(`
+            *,
+            player1:players!pairings_player1_id_fkey(id, name, rating),
+            player2:players!pairings_player2_id_fkey(id, name, rating)
+          `)
+          .eq('tournament_id', tournamentId)
+          .eq('round_number', currentRound)
+          .order('table_number');
 
-      if (pairingsError) throw pairingsError;
+        if (error) throw error;
+        return data || [];
+      });
 
       setPairings(pairingsData as PairingWithPlayers[]);
 
       // Load existing results
-      const { data: resultsData, error: resultsError } = await supabase
-        .from('results')
-        .select('*')
-        .eq('tournament_id', tournamentId)
-        .eq('round_number', currentRound);
-        
-      if (resultsError && resultsError.code !== 'PGRST116') {
-        throw resultsError;
-      }
+      const resultsData = await retrySupabaseOperation(async () => {
+        const { data, error } = await supabase
+          .from('results')
+          .select('*')
+          .eq('tournament_id', tournamentId)
+          .eq('round_number', currentRound);
+          
+        if (error && error.code !== 'PGRST116') {
+          throw error;
+        }
+        return data || [];
+      });
 
       // Initialize scores state
       const initialScores: Record<string, ScoreInput> = {};
@@ -189,7 +230,7 @@ const ScoreEntry: React.FC<ScoreEntryProps> = ({
 
     } catch (err) {
       console.error('Error loading data:', err);
-      setError('Failed to load tournament data');
+      setError(handleSupabaseError(err, 'loading data'));
     } finally {
       setIsLoading(false);
     }
@@ -474,30 +515,44 @@ const ScoreEntry: React.FC<ScoreEntryProps> = ({
     setError(null);
 
     try {
+      // Check connection
+      const isConnected = await checkConnection();
+      if (!isConnected) {
+        throw new Error('Unable to connect to database. Please check your internet connection.');
+      }
+
       // Prepare results data with tournament_id
-      const resultsToInsert: Omit<Result, 'id' | 'created_at'>[] = Object.values(scores).map(score => ({
-        pairing_id: score.pairingId,
-        tournament_id: tournamentId, // Include tournament_id for direct relationship
-        round_number: currentRound,
-        player1_score: Number(score.player1Score),
-        player2_score: Number(score.player2Score),
-        winner_id: score.winnerId || null,
-        submitted_by: null // Could be user ID if needed
-      }));
+      const resultsToInsert: Omit<Result, 'id' | 'created_at'>[] = Object.values(scores)
+        .filter(score => score.player1Score !== '' && score.player2Score !== '')
+        .map(score => ({
+          pairing_id: score.pairingId,
+          tournament_id: tournamentId, // Include tournament_id for direct relationship
+          round_number: currentRound,
+          player1_score: Number(score.player1Score),
+          player2_score: Number(score.player2Score),
+          winner_id: score.winnerId || null,
+          submitted_by: null // Could be user ID if needed
+        }));
 
       // Delete existing results for this round (in case of re-entry)
-      await supabase
-        .from('results')
-        .delete()
-        .eq('round_number', currentRound)
-        .eq('tournament_id', tournamentId);
+      await retrySupabaseOperation(async () => {
+        const { error } = await supabase
+          .from('results')
+          .delete()
+          .eq('round_number', currentRound)
+          .eq('tournament_id', tournamentId);
+
+        if (error) throw error;
+      });
 
       // Insert new results
-      const { error: insertError } = await supabase
-        .from('results')
-        .insert(resultsToInsert);
+      await retrySupabaseOperation(async () => {
+        const { error } = await supabase
+          .from('results')
+          .insert(resultsToInsert);
 
-      if (insertError) throw insertError;
+        if (error) throw error;
+      });
       
       // Log scores submitted
       logAction({
@@ -513,7 +568,7 @@ const ScoreEntry: React.FC<ScoreEntryProps> = ({
       onNext();
     } catch (err) {
       console.error('Error saving scores:', err);
-      setError('Failed to save scores. Please try again.');
+      setError(handleSupabaseError(err, 'saving scores'));
     } finally {
       setIsSaving(false);
     }
@@ -526,9 +581,15 @@ const ScoreEntry: React.FC<ScoreEntryProps> = ({
     setError(null);
 
     try {
+      // Check connection
+      const isConnected = await checkConnection();
+      if (!isConnected) {
+        throw new Error('Unable to connect to database. Please check your internet connection.');
+      }
+
       // Prepare results data
       const resultsToUpdate: Omit<Result, 'id' | 'created_at'>[] = Object.values(pastRoundScores)
-        .filter(score => score.hasChanges)
+        .filter(score => score.hasChanges && score.player1Score !== '' && score.player2Score !== '')
         .map(score => ({
           pairing_id: score.pairingId,
           tournament_id: tournamentId,
@@ -557,16 +618,18 @@ const ScoreEntry: React.FC<ScoreEntryProps> = ({
           
         if (existingResult) {
           // Update existing result
-          const { error: updateError } = await supabase
-            .from('results')
-            .update({
-              player1_score: result.player1_score,
-              player2_score: result.player2_score,
-              winner_id: result.winner_id
-            })
-            .eq('id', existingResult.id);
-            
-          if (updateError) throw updateError;
+          await retrySupabaseOperation(async () => {
+            const { error } = await supabase
+              .from('results')
+              .update({
+                player1_score: result.player1_score,
+                player2_score: result.player2_score,
+                winner_id: result.winner_id
+              })
+              .eq('id', existingResult.id);
+              
+            if (error) throw error;
+          });
           
           // Log score update in audit log
           logAction({
@@ -581,11 +644,13 @@ const ScoreEntry: React.FC<ScoreEntryProps> = ({
           });
         } else {
           // Insert new result
-          const { error: insertError } = await supabase
-            .from('results')
-            .insert([result]);
-            
-          if (insertError) throw insertError;
+          await retrySupabaseOperation(async () => {
+            const { error } = await supabase
+              .from('results')
+              .insert([result]);
+              
+            if (error) throw error;
+          });
           
           // Log score added in audit log
           logAction({
@@ -626,7 +691,7 @@ const ScoreEntry: React.FC<ScoreEntryProps> = ({
       
     } catch (err) {
       console.error('Error updating past round scores:', err);
-      setError('Failed to update past round scores');
+      setError(handleSupabaseError(err, 'updating past round scores'));
     } finally {
       setIsSaving(false);
     }
@@ -638,10 +703,52 @@ const ScoreEntry: React.FC<ScoreEntryProps> = ({
     loadData(); // Reload current round data
   };
 
+  const handleRetryConnection = async () => {
+    setConnectionError(null);
+    await loadData();
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-400 font-jetbrains">Loading score data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Connection Error Screen
+  if (connectionError) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center">
+        <ParticleBackground />
+        <div className="relative z-10 max-w-md mx-auto text-center p-8">
+          <div className="bg-red-900/30 border border-red-500/50 rounded-xl p-8 backdrop-blur-sm">
+            <AlertTriangle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-white mb-4 font-orbitron">Connection Error</h2>
+            <p className="text-red-300 font-jetbrains text-sm mb-6">
+              {connectionError}
+            </p>
+            <div className="space-y-3">
+              <Button
+                icon={RefreshCw}
+                label="Retry Connection"
+                onClick={handleRetryConnection}
+                variant="blue"
+                className="w-full"
+              />
+              <button
+                onClick={onBack}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white rounded-lg font-jetbrains transition-all duration-200"
+              >
+                <ArrowLeft size={16} />
+                Back to Round Manager
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
