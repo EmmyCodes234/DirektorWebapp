@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ChevronDown, ChevronUp, X, Download, AlertTriangle, RefreshCw, Trash2, Check, Eye, EyeOff } from 'lucide-react';
 import { supabase, handleSupabaseError, retrySupabaseOperation } from '../lib/supabase';
 import { Tournament, PairingWithPlayers, Result } from '../types/database';
+import WinProbabilityBadge from './WinProbabilityBadge';
 
 interface PairingsManagerProps {
   tournamentId: string;
@@ -523,11 +524,20 @@ const PairingsManager: React.FC<PairingsManagerProps> = ({
                                 {pairing.table_number}
                               </td>
                               <td className="px-4 py-3 whitespace-nowrap">
-                                <div className="text-sm font-medium text-white">
-                                  {pairing.player1.name}
-                                </div>
-                                <div className="text-xs text-gray-400 font-jetbrains">
-                                  Rating: {pairing.player1.rating}
+                                <div>
+                                  <div className="text-sm font-medium text-white">
+                                    {pairing.player1.name}
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <div className="text-xs text-gray-400 font-jetbrains">
+                                      Rating: {pairing.player1.rating}
+                                    </div>
+                                    <WinProbabilityBadge 
+                                      playerRating={pairing.player1.rating} 
+                                      opponentRating={pairing.player2.rating}
+                                      className="ml-2"
+                                    />
+                                  </div>
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-center whitespace-nowrap">
@@ -541,11 +551,20 @@ const PairingsManager: React.FC<PairingsManagerProps> = ({
                                 </div>
                               </td>
                               <td className="px-4 py-3 whitespace-nowrap">
-                                <div className="text-sm font-medium text-white">
-                                  {pairing.player2.name}
-                                </div>
-                                <div className="text-xs text-gray-400 font-jetbrains">
-                                  Rating: {pairing.player2.rating}
+                                <div>
+                                  <div className="text-sm font-medium text-white">
+                                    {pairing.player2.name}
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <div className="text-xs text-gray-400 font-jetbrains">
+                                      Rating: {pairing.player2.rating}
+                                    </div>
+                                    <WinProbabilityBadge 
+                                      playerRating={pairing.player2.rating} 
+                                      opponentRating={pairing.player1.rating}
+                                      className="ml-2"
+                                    />
+                                  </div>
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-center whitespace-nowrap">

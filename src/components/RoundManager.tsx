@@ -9,6 +9,7 @@ import { Tournament, Player, PlayerWithRank, PairingDisplay, PairingFormat } fro
 import { generatePairings } from '../utils/pairingAlgorithms';
 import PairingsManager from './PairingsManager';
 import PlayerRoster from './PlayerRoster';
+import WinProbabilityBadge from './WinProbabilityBadge';
 
 interface RoundManagerProps {
   onBack: () => void;
@@ -1003,8 +1004,15 @@ const RoundManager: React.FC<RoundManagerProps> = ({
                                 <div className="text-sm font-medium text-white">
                                   {pairing.player1.name}
                                 </div>
-                                <div className="text-xs text-gray-400 font-jetbrains">
-                                  #{pairing.player1.rank} • {pairing.player1.rating}
+                                <div className="flex items-center justify-between">
+                                  <div className="text-xs text-gray-400 font-jetbrains">
+                                    #{pairing.player1.rank} • {pairing.player1.rating}
+                                  </div>
+                                  <WinProbabilityBadge 
+                                    playerRating={pairing.player1.rating} 
+                                    opponentRating={pairing.player2.rating}
+                                    className="ml-2"
+                                  />
                                 </div>
                               </div>
                             </div>
@@ -1020,8 +1028,15 @@ const RoundManager: React.FC<RoundManagerProps> = ({
                                 <div className="text-sm font-medium text-white">
                                   {pairing.player2.name}
                                 </div>
-                                <div className="text-xs text-gray-400 font-jetbrains">
-                                  #{pairing.player2.rank} • {pairing.player2.rating}
+                                <div className="flex items-center justify-between">
+                                  <div className="text-xs text-gray-400 font-jetbrains">
+                                    #{pairing.player2.rank} • {pairing.player2.rating}
+                                  </div>
+                                  <WinProbabilityBadge 
+                                    playerRating={pairing.player2.rating} 
+                                    opponentRating={pairing.player1.rating}
+                                    className="ml-2"
+                                  />
                                 </div>
                               </div>
                             </div>
