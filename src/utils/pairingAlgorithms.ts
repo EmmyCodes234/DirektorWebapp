@@ -8,8 +8,10 @@ export function generatePairings(
   currentRound: number = 1,
   totalRounds: number = 7
 ): PairingDisplay[] {
-  // Filter out paused players
-  const activePlayers = players.filter(p => !p.status || p.status === 'active');
+  // Filter out players who are not active (paused or withdrawn)
+  const activePlayers = players.filter(p => 
+    p.participation_status === 'active' || !p.participation_status
+  );
   
   // Calculate current standings and Gibsonization status
   const playersWithGibsonization = calculateGibsonization(activePlayers, currentRound, totalRounds);

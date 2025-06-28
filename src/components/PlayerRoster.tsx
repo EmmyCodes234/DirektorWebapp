@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, ArrowUp, ArrowDown, X, Download, User, Users, UserCheck, UserX } from 'lucide-react';
+import { Search, Filter, ArrowUp, ArrowDown, X, Download, User, Users, UserCheck, PauseCircle, Play, UserMinus } from 'lucide-react';
 import { supabase, handleSupabaseError, retrySupabaseOperation } from '../lib/supabase';
 import { Player, Division, Team } from '../types/database';
 import TeamLogo from './TeamLogo';
@@ -26,9 +26,10 @@ const PlayerRoster: React.FC<PlayerRosterProps> = ({
   const [selectedDivision, setSelectedDivision] = useState<string>('all');
   const [selectedTeam, setSelectedTeam] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
-  const [sortField, setSortField] = useState<'name' | 'rating' | 'status'>('rating');
+  const [sortField, setSortField] = useState<'name' | 'rating'>('rating');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState<string | null>(null);
+  const [isStatusChangeConfirm, setIsStatusChangeConfirm] = useState<{playerId: string, status: string} | null>(null);
 
   useEffect(() => {
     loadData();
@@ -93,7 +94,7 @@ const PlayerRoster: React.FC<PlayerRosterProps> = ({
     }
   };
 
-  const handleSort = (field: 'name' | 'rating' | 'status') => {
+  const handleSort = (field: 'name' | 'rating') => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
@@ -152,35 +153,38 @@ const PlayerRoster: React.FC<PlayerRosterProps> = ({
     }
   };
 
-  const handleTogglePlayerStatus = async (player: Player) => {
+  const handleChangeParticipationStatus = async (playerId: string, newStatus: string) => {
+    // Confirm status change if not already confirming
+    if (!isStatusChangeConfirm || isStatusChangeConfirm.playerId !== playerId || isStatusChangeConfirm.status !== newStatus) {
+      setIsStatusChangeConfirm({ playerId, status: newStatus });
+      setTimeout(() => setIsStatusChangeConfirm(null), 3000);
+      return;
+    }
+
     try {
-      const newStatus = player.status === 'paused' ? 'active' : 'paused';
-      
-      const { error } = await supabase
-        .from('players')
-        .update({
-          status: newStatus,
-          paused_at: newStatus === 'paused' ? new Date().toISOString() : null,
-          paused_reason: newStatus === 'paused' ? 'Manually paused' : null
-        })
-        .eq('id', player.id);
-        
-      if (error) throw error;
-      
-      // Update local state
+      await retrySupabaseOperation(async () => {
+        const { error } = await supabase
+          .from('players')
+          .update({ participation_status: newStatus })
+          .eq('id', playerId);
+
+        if (error) throw error;
+      });
+
+      // Update player in local state
       setPlayers(players.map(p => 
-        p.id === player.id 
-          ? { ...p, status: newStatus, paused_at: newStatus === 'paused' ? new Date().toISOString() : null } 
-          : p
+        p.id === playerId ? { ...p, participation_status: newStatus } : p
       ));
       
+      setIsStatusChangeConfirm(null);
+
       // Show success toast
       const toast = document.createElement('div');
       toast.className = 'fixed top-4 right-4 z-50 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg font-jetbrains text-sm border border-green-500/50';
       toast.innerHTML = `
         <div class="flex items-center gap-2">
           <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-          Player ${newStatus === 'paused' ? 'paused' : 'activated'} successfully
+          Player status updated successfully
         </div>
       `;
       document.body.appendChild(toast);
@@ -203,7 +207,7 @@ const PlayerRoster: React.FC<PlayerRosterProps> = ({
       player.rating.toString(),
       getDivisionName(player),
       player.team_name || '',
-      player.status || 'active'
+      player.participation_status || 'active'
     ]);
 
     const csvContent = [headers, ...rows]
@@ -225,26 +229,16 @@ const PlayerRoster: React.FC<PlayerRosterProps> = ({
     return divisions.length > 0 ? divisions[0].name : 'Main Division';
   };
 
-  const getStatusBadge = (status?: string) => {
+  const getStatusBadge = (status: string = 'active') => {
     switch (status) {
+      case 'active':
+        return <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100/10 text-green-300 border border-green-500/30">Active</span>;
       case 'paused':
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100/10 text-yellow-300 border border-yellow-500/30">
-            Paused
-          </span>
-        );
+        return <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100/10 text-yellow-300 border border-yellow-500/30">Paused</span>;
       case 'withdrawn':
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100/10 text-red-300 border border-red-500/30">
-            Withdrawn
-          </span>
-        );
+        return <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100/10 text-red-300 border border-red-500/30">Withdrawn</span>;
       default:
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100/10 text-green-300 border border-green-500/30">
-            Active
-          </span>
-        );
+        return <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100/10 text-gray-300 border border-gray-500/30">{status}</span>;
     }
   };
 
@@ -261,8 +255,8 @@ const PlayerRoster: React.FC<PlayerRosterProps> = ({
       const matchesTeam = selectedTeam === 'all' || player.team_name === selectedTeam;
       
       // Status filter
-      const matchesStatus = selectedStatus === 'all' || player.status === selectedStatus || 
-                           (selectedStatus === 'active' && !player.status);
+      const matchesStatus = selectedStatus === 'all' || 
+        (player.participation_status || 'active') === selectedStatus;
       
       return matchesSearch && matchesDivision && matchesTeam && matchesStatus;
     })
@@ -271,12 +265,6 @@ const PlayerRoster: React.FC<PlayerRosterProps> = ({
         return sortDirection === 'asc' 
           ? a.name.localeCompare(b.name)
           : b.name.localeCompare(a.name);
-      } else if (sortField === 'status') {
-        const statusA = a.status || 'active';
-        const statusB = b.status || 'active';
-        return sortDirection === 'asc'
-          ? statusA.localeCompare(statusB)
-          : statusB.localeCompare(statusA);
       } else {
         return sortDirection === 'asc'
           ? a.rating - b.rating
@@ -357,10 +345,10 @@ const PlayerRoster: React.FC<PlayerRosterProps> = ({
               </select>
             </div>
           )}
-          
+
           {/* Status Filter */}
           <div className="flex items-center gap-2">
-            <UserX className="h-4 w-4 text-gray-400" />
+            <Filter className="h-4 w-4 text-gray-400" />
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
@@ -433,18 +421,8 @@ const PlayerRoster: React.FC<PlayerRosterProps> = ({
                     Team
                   </th>
                 )}
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider font-jetbrains">
-                  <button
-                    onClick={() => handleSort('status')}
-                    className="flex items-center gap-1 hover:text-white transition-colors duration-200"
-                  >
-                    Status
-                    {sortField === 'status' && (
-                      sortDirection === 'asc' ? 
-                        <ArrowUp className="h-3 w-3" /> : 
-                        <ArrowDown className="h-3 w-3" />
-                    )}
-                  </button>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider font-jetbrains">
+                  Status
                 </th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider font-jetbrains">
                   Actions
@@ -489,11 +467,55 @@ const PlayerRoster: React.FC<PlayerRosterProps> = ({
                       )}
                     </td>
                   )}
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    {getStatusBadge(player.status)}
+                  <td className="px-4 py-4 whitespace-nowrap text-center">
+                    {getStatusBadge(player.participation_status)}
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap text-center">
                     <div className="flex items-center justify-center gap-2">
+                      {/* Status Change Buttons */}
+                      {(player.participation_status === 'active' || !player.participation_status) && (
+                        <button
+                          onClick={() => handleChangeParticipationStatus(player.id!, 'paused')}
+                          className={`px-2 py-1 rounded text-xs font-jetbrains transition-all duration-200 ${
+                            isStatusChangeConfirm?.playerId === player.id && isStatusChangeConfirm?.status === 'paused'
+                              ? 'bg-yellow-600 text-white animate-pulse'
+                              : 'bg-yellow-600/20 border border-yellow-500/50 text-yellow-400 hover:bg-yellow-600/30 hover:text-white'
+                          }`}
+                          title="Pause player participation"
+                        >
+                          <PauseCircle className="w-4 h-4" />
+                        </button>
+                      )}
+                      
+                      {player.participation_status === 'paused' && (
+                        <button
+                          onClick={() => handleChangeParticipationStatus(player.id!, 'active')}
+                          className={`px-2 py-1 rounded text-xs font-jetbrains transition-all duration-200 ${
+                            isStatusChangeConfirm?.playerId === player.id && isStatusChangeConfirm?.status === 'active'
+                              ? 'bg-green-600 text-white animate-pulse'
+                              : 'bg-green-600/20 border border-green-500/50 text-green-400 hover:bg-green-600/30 hover:text-white'
+                          }`}
+                          title="Resume player participation"
+                        >
+                          <Play className="w-4 h-4" />
+                        </button>
+                      )}
+                      
+                      {player.participation_status !== 'withdrawn' && (
+                        <button
+                          onClick={() => handleChangeParticipationStatus(player.id!, 'withdrawn')}
+                          className={`px-2 py-1 rounded text-xs font-jetbrains transition-all duration-200 ${
+                            isStatusChangeConfirm?.playerId === player.id && isStatusChangeConfirm?.status === 'withdrawn'
+                              ? 'bg-red-600 text-white animate-pulse'
+                              : 'bg-red-600/20 border border-red-500/50 text-red-400 hover:bg-red-600/30 hover:text-white'
+                          }`}
+                          title="Withdraw player from tournament"
+                        >
+                          <UserMinus className="w-4 h-4" />
+                        </button>
+                      )}
+                      
+                      {/* Edit Button */}
                       {onEditPlayer && (
                         <button
                           onClick={() => onEditPlayer(player)}
@@ -502,16 +524,8 @@ const PlayerRoster: React.FC<PlayerRosterProps> = ({
                           Edit
                         </button>
                       )}
-                      <button
-                        onClick={() => handleTogglePlayerStatus(player)}
-                        className={`px-2 py-1 rounded text-xs font-jetbrains transition-all duration-200 ${
-                          player.status === 'paused'
-                            ? 'bg-green-600/20 border border-green-500/50 text-green-400 hover:bg-green-600/30 hover:text-white'
-                            : 'bg-yellow-600/20 border border-yellow-500/50 text-yellow-400 hover:bg-yellow-600/30 hover:text-white'
-                        }`}
-                      >
-                        {player.status === 'paused' ? 'Activate' : 'Pause'}
-                      </button>
+                      
+                      {/* Delete Button */}
                       {onDeletePlayer && (
                         <button
                           onClick={() => handleDeleteConfirm(player.id!)}
@@ -550,23 +564,23 @@ const PlayerRoster: React.FC<PlayerRosterProps> = ({
         
         <div className="bg-gray-900/50 border border-green-500/30 rounded-lg p-4 text-center">
           <div className="text-2xl font-bold text-green-400 font-orbitron">
-            {players.filter(p => !p.status || p.status === 'active').length}
+            {players.filter(p => p.participation_status === 'active' || !p.participation_status).length}
           </div>
           <div className="text-gray-400 text-sm">Active Players</div>
         </div>
         
         <div className="bg-gray-900/50 border border-yellow-500/30 rounded-lg p-4 text-center">
           <div className="text-2xl font-bold text-yellow-400 font-orbitron">
-            {players.filter(p => p.status === 'paused').length}
+            {players.filter(p => p.participation_status === 'paused').length}
           </div>
           <div className="text-gray-400 text-sm">Paused Players</div>
         </div>
         
-        <div className="bg-gray-900/50 border border-blue-500/30 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-blue-400 font-orbitron">
-            {players.length > 0 ? Math.round(players.reduce((sum, p) => sum + p.rating, 0) / players.length) : 0}
+        <div className="bg-gray-900/50 border border-red-500/30 rounded-lg p-4 text-center">
+          <div className="text-2xl font-bold text-red-400 font-orbitron">
+            {players.filter(p => p.participation_status === 'withdrawn').length}
           </div>
-          <div className="text-gray-400 text-sm">Average Rating</div>
+          <div className="text-gray-400 text-sm">Withdrawn Players</div>
         </div>
       </div>
     </div>

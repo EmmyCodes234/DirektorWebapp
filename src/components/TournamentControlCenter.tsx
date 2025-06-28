@@ -1,6 +1,6 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, Trophy, BarChart3, Settings, Share2, QrCode, Eye, AlertTriangle, UserPlus, UserMinus, UserX } from 'lucide-react';
+import { ArrowLeft, Users, Trophy, BarChart3, Settings, Share2, QrCode, Eye, AlertTriangle, UserPlus } from 'lucide-react';
 import { supabase, testSupabaseConnection, handleSupabaseError } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 
@@ -12,7 +12,7 @@ const AdminPanel = React.lazy(() => import('./AdminPanel'));
 const QRCodeModal = React.lazy(() => import('./QRCodeModal'));
 const Statistics = React.lazy(() => import('./Statistics/Statistics'));
 const PlayerRoster = React.lazy(() => import('./PlayerRoster'));
-const PlayerManagementModal = React.lazy(() => import('./PlayerManagementModal'));
+const AddPlayerModal = React.lazy(() => import('./AddPlayerModal'));
 
 interface Tournament {
   id: string;
@@ -33,13 +33,12 @@ const TournamentControlCenter: React.FC = () => {
   
   const [user, setUser] = useState<User | null>(null);
   const [tournament, setTournament] = useState<Tournament | null>(null);
-  const [activeTab, setActiveTab] = useState<ActiveTab>('rounds');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('players');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showQRModal, setShowQRModal] = useState(false);
+  const [showAddPlayerModal, setShowAddPlayerModal] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
-  const [showPlayerManagementModal, setShowPlayerManagementModal] = useState(false);
-  const [playerManagementMode, setPlayerManagementMode] = useState<'add' | 'remove' | 'pause'>('add');
 
   useEffect(() => {
     initializeComponent();
@@ -128,49 +127,21 @@ const TournamentControlCenter: React.FC = () => {
     setShowQRModal(true);
   };
 
+  const handleAddPlayer = () => {
+    setShowAddPlayerModal(true);
+  };
+
+  const handlePlayerAdded = () => {
+    setShowAddPlayerModal(false);
+    // Refresh player roster if needed
+    if (activeTab === 'players') {
+      // The PlayerRoster component will handle its own refresh
+    }
+  };
+
   const retryConnection = async () => {
     setConnectionError(null);
     await initializeComponent();
-  };
-
-  const handleOpenPlayerManagement = (mode: 'add' | 'remove' | 'pause') => {
-    setPlayerManagementMode(mode);
-    setShowPlayerManagementModal(true);
-  };
-
-  const handlePlayerManagementComplete = () => {
-    setShowPlayerManagementModal(false);
-    // Refresh data if needed
-    loadTournament();
-  };
-
-  // Navigation handlers for RoundManager
-  const handleRoundManagerBack = () => {
-    setActiveTab('players');
-  };
-
-  const handleRoundManagerNext = () => {
-    setActiveTab('scores');
-  };
-
-  // Navigation handlers for ScoreEntry
-  const handleScoreEntryBack = () => {
-    setActiveTab('rounds');
-  };
-
-  const handleScoreEntryNext = () => {
-    setActiveTab('standings');
-  };
-
-  // Navigation handlers for Standings
-  const handleStandingsBack = () => {
-    setActiveTab('scores');
-  };
-
-  const handleStandingsNextRound = async () => {
-    // This would typically advance to the next round
-    await loadTournament(); // Reload tournament data to get updated current_round
-    setActiveTab('rounds');
   };
 
   if (loading) {
@@ -184,6 +155,7 @@ const TournamentControlCenter: React.FC = () => {
     );
   }
 
+  // Connection Error Screen
   if (connectionError) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center px-4">
@@ -277,40 +249,20 @@ const TournamentControlCenter: React.FC = () => {
         return (
           <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" /></div>}>
             <div className="space-y-6">
-              {/* Player Management Actions */}
-              <div className="bg-gray-900/50 border border-gray-700 rounded-xl p-6 backdrop-blur-sm">
-                <h2 className="text-xl font-bold text-white font-orbitron mb-4">Player Management</h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <button
-                    onClick={() => handleOpenPlayerManagement('add')}
-                    className="flex items-center justify-center gap-2 px-4 py-3 bg-green-600/20 border border-green-500/50 text-green-400 hover:bg-green-600/30 hover:text-white rounded-lg transition-all duration-200 font-jetbrains"
-                  >
-                    <UserPlus size={18} />
-                    Add Player
-                  </button>
-                  <button
-                    onClick={() => handleOpenPlayerManagement('remove')}
-                    className="flex items-center justify-center gap-2 px-4 py-3 bg-red-600/20 border border-red-500/50 text-red-400 hover:bg-red-600/30 hover:text-white rounded-lg transition-all duration-200 font-jetbrains"
-                  >
-                    <UserMinus size={18} />
-                    Remove Player
-                  </button>
-                  <button
-                    onClick={() => handleOpenPlayerManagement('pause')}
-                    className="flex items-center justify-center gap-2 px-4 py-3 bg-yellow-600/20 border border-yellow-500/50 text-yellow-400 hover:bg-yellow-600/30 hover:text-white rounded-lg transition-all duration-200 font-jetbrains"
-                  >
-                    <UserX size={18} />
-                    Pause Participation
-                  </button>
-                </div>
+              {/* Add Player Button */}
+              <div className="flex justify-end">
+                <button
+                  onClick={handleAddPlayer}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600/20 border border-green-500/50 text-green-400 hover:bg-green-600/30 hover:text-white rounded-lg transition-all duration-200 font-jetbrains text-sm"
+                >
+                  <UserPlus size={16} />
+                  Add Player
+                </button>
               </div>
               
-              {/* Player Roster */}
-              <PlayerRoster
-                tournamentId={tournamentId!}
-                teamMode={tournament.team_mode || false}
-                onEditPlayer={() => handleOpenPlayerManagement('add')}
-                onDeletePlayer={() => handleOpenPlayerManagement('remove')}
+              <PlayerRoster 
+                tournamentId={tournamentId!} 
+                teamMode={tournament.team_mode}
               />
             </div>
           </Suspense>
@@ -322,8 +274,8 @@ const TournamentControlCenter: React.FC = () => {
               {...commonProps}
               currentRound={tournament.current_round}
               maxRounds={tournament.rounds}
-              onBack={handleRoundManagerBack}
-              onNext={handleRoundManagerNext}
+              onBack={() => setActiveTab('players')}
+              onNext={() => setActiveTab('scores')}
             />
           </Suspense>
         );
@@ -333,8 +285,8 @@ const TournamentControlCenter: React.FC = () => {
             <ScoreEntry 
               {...commonProps}
               currentRound={tournament.current_round}
-              onBack={handleScoreEntryBack}
-              onNext={handleScoreEntryNext}
+              onBack={() => setActiveTab('rounds')}
+              onNext={() => setActiveTab('standings')}
             />
           </Suspense>
         );
@@ -345,8 +297,11 @@ const TournamentControlCenter: React.FC = () => {
               {...commonProps}
               currentRound={tournament.current_round}
               maxRounds={tournament.rounds}
-              onBack={handleStandingsBack}
-              onNextRound={handleStandingsNextRound}
+              onBack={() => setActiveTab('scores')}
+              onNextRound={() => {
+                loadTournament();
+                setActiveTab('rounds');
+              }}
             />
           </Suspense>
         );
@@ -459,16 +414,15 @@ const TournamentControlCenter: React.FC = () => {
         </Suspense>
       )}
 
-      {/* Player Management Modal */}
-      {showPlayerManagementModal && (
+      {/* Add Player Modal */}
+      {showAddPlayerModal && (
         <Suspense fallback={null}>
-          <PlayerManagementModal
-            isOpen={showPlayerManagementModal}
-            onClose={() => setShowPlayerManagementModal(false)}
+          <AddPlayerModal
+            isOpen={showAddPlayerModal}
+            onClose={() => setShowAddPlayerModal(false)}
+            onPlayerAdded={handlePlayerAdded}
             tournamentId={tournamentId!}
-            mode={playerManagementMode}
-            onComplete={handlePlayerManagementComplete}
-            teamMode={tournament.team_mode || false}
+            teamMode={tournament.team_mode}
           />
         </Suspense>
       )}

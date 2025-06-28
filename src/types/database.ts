@@ -5,9 +5,7 @@ export interface Player {
   tournament_id: string;
   team_name?: string; // Added for team mode
   created_at?: string;
-  status?: 'active' | 'paused' | 'withdrawn'; // Player participation status
-  paused_at?: string; // When the player was paused
-  paused_reason?: string; // Reason for pausing
+  participation_status?: 'active' | 'paused' | 'withdrawn'; // Added for player participation management
 }
 
 export interface Tournament {
