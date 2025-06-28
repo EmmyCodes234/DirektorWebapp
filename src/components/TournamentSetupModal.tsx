@@ -16,8 +16,8 @@ interface FormData {
   name: string;
   date: string;
   venue: string;
-  rounds: number;
-  divisions: number;
+  rounds: number | '';
+  divisions: number | '';
   divisionNames: string[];
   teamMode: boolean;
   isPasswordProtected: boolean;
@@ -176,8 +176,8 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
     name: '',
     date: '',
     venue: '',
-    rounds: 7,
-    divisions: 1,
+    rounds: '',
+    divisions: '',
     divisionNames: ['Main Division'],
     teamMode: false,
     isPasswordProtected: false,
@@ -199,8 +199,8 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
       const updated = { ...prev, [field]: value };
       
       // Update division names when division count changes
-      if (field === 'divisions') {
-        const divisionCount = value as number;
+      if (field === 'divisions' && typeof value === 'number') {
+        const divisionCount = value;
         const newDivisionNames = Array.from({ length: divisionCount }, (_, i) => {
           return prev.divisionNames[i] || `Division ${String.fromCharCode(65 + i)}`;
         });
@@ -227,15 +227,23 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
       setError('Tournament date is required');
       return false;
     }
-    if (formData.rounds < 1 || formData.rounds > 15) {
+    if (formData.rounds === '') {
+      setError('Number of rounds is required');
+      return false;
+    }
+    if (typeof formData.rounds === 'number' && (formData.rounds < 1 || formData.rounds > 15)) {
       setError('Number of rounds must be between 1 and 15');
       return false;
     }
-    if (formData.divisions < 1 || formData.divisions > 10) {
+    if (formData.divisions === '') {
+      setError('Number of divisions is required');
+      return false;
+    }
+    if (typeof formData.divisions === 'number' && (formData.divisions < 1 || formData.divisions > 10)) {
       setError('Number of divisions must be between 1 and 10');
       return false;
     }
-    for (let i = 0; i < formData.divisions; i++) {
+    for (let i = 0; i < (typeof formData.divisions === 'number' ? formData.divisions : 0); i++) {
       if (!formData.divisionNames[i]?.trim()) {
         setError(`Division ${i + 1} name is required`);
         return false;
@@ -360,7 +368,7 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
     const recommendation = recommendPairingSystem({
       primary: responses.suspenseUntilEnd === 'critical' ? 'Max suspense' : 'Max fairness',
       playerCount: 32, // Estimate
-      rounds: formData.rounds,
+      rounds: typeof formData.rounds === 'number' ? formData.rounds : 7,
       competitiveLevel: (responses.competitiveLevel as any) || 'competitive',
       priorityGoals
     });
@@ -415,8 +423,8 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
         name: formData.name.trim(),
         date: formData.date,
         venue: formData.venue.trim() || null,
-        rounds: formData.rounds,
-        divisions: formData.divisions,
+        rounds: typeof formData.rounds === 'number' ? formData.rounds : null,
+        divisions: typeof formData.divisions === 'number' ? formData.divisions : null,
         director_id: user.id,
         status: 'registration' as const,
         team_mode: formData.teamMode,
@@ -467,7 +475,7 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
       }
 
       // Create divisions if multiple
-      if (formData.divisions > 1) {
+      if (typeof formData.divisions === 'number' && formData.divisions > 1) {
         const divisionsToInsert = formData.divisionNames.map((name, index) => ({
           tournament_id: tournament.id,
           name: name.trim(),
@@ -500,8 +508,8 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
           tournament_name: tournament.name,
           team_mode: formData.teamMode,
           pairing_system: selectedPairingFormat,
-          divisions: formData.divisions,
-          rounds: formData.rounds,
+          divisions: typeof formData.divisions === 'number' ? formData.divisions : 1,
+          rounds: typeof formData.rounds === 'number' ? formData.rounds : null,
           password_protected: formData.isPasswordProtected,
           slug: finalSlug
         }
@@ -525,8 +533,8 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
       name: '',
       date: '',
       venue: '',
-      rounds: 7,
-      divisions: 1,
+      rounds: '',
+      divisions: '',
       divisionNames: ['Main Division'],
       teamMode: false,
       isPasswordProtected: false,
@@ -646,8 +654,9 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
                     min="1"
                     max="15"
                     value={formData.rounds}
-                    onChange={(e) => handleInputChange('rounds', parseInt(e.target.value) || 7)}
+                    onChange={(e) => handleInputChange('rounds', e.target.value ? parseInt(e.target.value) : '')}
                     className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 font-jetbrains"
+                    placeholder="Enter number of rounds"
                   />
                 </div>
 
@@ -662,8 +671,9 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
                     min="1"
                     max="10"
                     value={formData.divisions}
-                    onChange={(e) => handleInputChange('divisions', parseInt(e.target.value) || 1)}
+                    onChange={(e) => handleInputChange('divisions', e.target.value ? parseInt(e.target.value) : '')}
                     className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 font-jetbrains"
+                    placeholder="Enter number of divisions"
                   />
                 </div>
               </div>
@@ -787,7 +797,7 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
               </div>
 
               {/* Division Names */}
-              {formData.divisions > 1 && (
+              {typeof formData.divisions === 'number' && formData.divisions > 1 && (
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-4 font-jetbrains">
                     Division Names
