@@ -143,5 +143,3 @@ const DraftRecoveryDialog: React.FC<DraftRecoveryDialogProps> = ({
 };
 
 export default DraftRecoveryDialog;
-
-export default DraftRecoveryDialog
