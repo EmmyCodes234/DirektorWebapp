@@ -3,9 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { Trophy, BarChart3, Users, Plus } from 'lucide-react';
 import DashboardLayout from './UI/DashboardLayout';
 import TournamentSetupModal from './TournamentSetupModal';
+import DraftManager from './TournamentDrafts/DraftManager';
+import DraftRecoveryDialog from './TournamentDrafts/DraftRecoveryDialog';
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 import { useOnboarding } from '../hooks/useOnboarding';
+import { useTournamentDraftSystem } from '../hooks/useTournamentDraftSystem';
 
 // Lazy-loaded components
 const TournamentResume = React.lazy(() => import('./TournamentResume'));
@@ -32,13 +35,32 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
   const [showTournamentModal, setShowTournamentModal] = useState(false);
   const [hasExistingTournaments, setHasExistingTournaments] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
   
   const { hasCompletedOnboarding, resetOnboarding } = useOnboarding();
+  const { 
+    drafts, 
+    isLoading: isDraftsLoading, 
+    loadDraft, 
+    deleteDraft, 
+    renameDraft,
+    checkForExistingDrafts
+  } = useTournamentDraftSystem();
+  
+  const [showDraftRecovery, setShowDraftRecovery] = useState(false);
 
   useEffect(() => {
     loadUserProfile();
     checkExistingTournaments();
+    checkForDrafts();
   }, [user.id]);
+  
+  const checkForDrafts = async () => {
+    const existingDrafts = await checkForExistingDrafts();
+    if (existingDrafts.length > 0) {
+      setShowDraftRecovery(true);
+    }
+  };
 
   const checkExistingTournaments = async () => {
     try {
@@ -148,6 +170,7 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
   // Tournament navigation handlers
   const handleNewTournament = () => {
     setShowTournamentModal(true);
+    setSelectedDraftId(null);
   };
 
   const handleViewTournaments = () => {
@@ -184,6 +207,16 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
   const handleResumeTournament = (tournamentId: string, currentRound: number) => {
     // Navigate to the tournament control center
     navigate(`/tournament/${tournamentId}/dashboard`);
+  };
+  
+  const handleResumeDraft = (draftId: string) => {
+    setSelectedDraftId(draftId);
+    setShowTournamentModal(true);
+    setShowDraftRecovery(false);
+  };
+  
+  const handleDiscardDraft = async (draftId: string) => {
+    return await deleteDraft(draftId);
   };
 
   const handleRetryConnection = async () => {
@@ -226,6 +259,17 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
         subtitle={profile?.username || user.email}
         fabActions={fabActions}
       >
+        {/* Draft Recovery Dialog */}
+        <DraftRecoveryDialog
+          isOpen={showDraftRecovery}
+          onClose={() => setShowDraftRecovery(false)}
+          drafts={drafts}
+          onResumeDraft={handleResumeDraft}
+          onDiscardDraft={handleDiscardDraft}
+          onRenameDraft={renameDraft}
+          isLoading={isDraftsLoading}
+        />
+        
         {/* Connection Error Message */}
         {connectionError && (
           <div className="max-w-4xl mx-auto w-full mb-8">
@@ -252,6 +296,12 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
             </div>
           </div>
         )}
+        
+        {/* Draft Manager */}
+        <DraftManager
+          onCreateNew={handleNewTournament}
+          showRecoveryPrompt={false}
+        />
 
         {/* Dashboard Cards */}
         <div className="fade-up fade-up-delay-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -320,6 +370,7 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
           isOpen={showTournamentModal}
           onClose={() => setShowTournamentModal(false)}
           onSuccess={handleTournamentCreated}
+          draftId={selectedDraftId || undefined}
         />
         
         {/* Reset Onboarding Button (for testing) */}
