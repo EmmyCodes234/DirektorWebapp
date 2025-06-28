@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, FolderOpen, Trash2, Calendar, MapPin, Users, Trophy, Clock, ArrowRight, Target } from 'lucide-react';
+import { Plus, FolderOpen, Trash2, Calendar, MapPin, Users, Trophy, Clock, ArrowRight, Target, Filter, Search, X, Download } from 'lucide-react';
 import ParticleBackground from './ParticleBackground';
 import Button from './Button';
 import { supabase } from '../lib/supabase';
@@ -24,13 +24,58 @@ const TournamentResume: React.FC<TournamentResumeProps> = ({
 }) => {
   const navigate = useNavigate();
   const [tournaments, setTournaments] = useState<TournamentWithStats[]>([]);
+  const [filteredTournaments, setFilteredTournaments] = useState<TournamentWithStats[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<'recent' | 'name' | 'date'>('recent');
 
   useEffect(() => {
     loadDirectorTournaments();
   }, []);
+
+  useEffect(() => {
+    // Apply filters and sorting whenever tournaments, search query, or filters change
+    let filtered = [...tournaments];
+    
+    // Apply search filter
+    if (searchQuery) {
+      filtered = filtered.filter(tournament => 
+        tournament.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        tournament.venue?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(tournament => tournament.status === statusFilter);
+    }
+    
+    // Apply sorting
+    switch (sortBy) {
+      case 'name':
+        filtered.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+      case 'date':
+        filtered.sort((a, b) => {
+          if (!a.date) return 1;
+          if (!b.date) return -1;
+          return new Date(b.date).getTime() - new Date(a.date).getTime();
+        });
+        break;
+      case 'recent':
+      default:
+        filtered.sort((a, b) => {
+          const aTime = new Date(a.last_activity || a.created_at).getTime();
+          const bTime = new Date(b.last_activity || b.created_at).getTime();
+          return bTime - aTime;
+        });
+    }
+    
+    setFilteredTournaments(filtered);
+  }, [tournaments, searchQuery, statusFilter, sortBy]);
 
   const loadDirectorTournaments = async () => {
     try {
@@ -87,6 +132,7 @@ const TournamentResume: React.FC<TournamentResumeProps> = ({
       );
 
       setTournaments(tournamentsWithStats);
+      setFilteredTournaments(tournamentsWithStats);
     } catch (err) {
       console.error('Error loading tournaments:', err);
       setError('Failed to load your tournaments');
@@ -101,9 +147,9 @@ const TournamentResume: React.FC<TournamentResumeProps> = ({
 
   const handleViewTournament = (tournament: TournamentWithStats) => {
     if (tournament.slug) {
-      window.open(`https://direktorweb.com/tournaments/${tournament.slug}`, '_blank');
+      window.open(`/tournaments/${tournament.slug}`, '_blank');
     } else {
-      window.open(`https://direktorweb.com/t/${tournament.id}`, '_blank');
+      window.open(`/t/${tournament.id}`, '_blank');
     }
   };
 
@@ -129,6 +175,23 @@ const TournamentResume: React.FC<TournamentResumeProps> = ({
       // Reload tournaments
       await loadDirectorTournaments();
       setDeleteConfirm(null);
+      
+      // Show success toast
+      const toast = document.createElement('div');
+      toast.className = 'fixed top-4 right-4 z-50 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg font-jetbrains text-sm border border-green-500/50';
+      toast.innerHTML = `
+        <div class="flex items-center gap-2">
+          <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+          Tournament deleted successfully
+        </div>
+      `;
+      document.body.appendChild(toast);
+      
+      setTimeout(() => {
+        if (document.body.contains(toast)) {
+          document.body.removeChild(toast);
+        }
+      }, 3000);
     } catch (err) {
       console.error('Error deleting tournament:', err);
       setError('Failed to delete tournament');
@@ -174,6 +237,31 @@ const TournamentResume: React.FC<TournamentResumeProps> = ({
     if (diffDays < 7) return `${diffDays}d ago`;
     return date.toLocaleDateString();
   };
+  
+  const handleExportTournaments = () => {
+    const headers = ['Name', 'Date', 'Venue', 'Status', 'Players', 'Rounds', 'Last Activity'];
+    const rows = tournaments.map(t => [
+      t.name,
+      t.date || 'N/A',
+      t.venue || 'N/A',
+      t.status || 'N/A',
+      t.player_count.toString(),
+      `${t.completed_rounds}/${t.rounds || 7}`,
+      formatLastActivity(t.last_activity || t.created_at)
+    ]);
+
+    const csvContent = [headers, ...rows]
+      .map(row => row.map(cell => `"${cell}"`).join(','))
+      .join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Tournaments_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   if (isLoading) {
     return (
@@ -189,7 +277,7 @@ const TournamentResume: React.FC<TournamentResumeProps> = ({
       
       <div className="relative z-10 min-h-screen flex flex-col px-4 py-8">
         {/* Header */}
-        <div className="text-center mb-12 max-w-6xl mx-auto">
+        <div className="text-center mb-8 max-w-6xl mx-auto">
           <h1 className="glitch-text fade-up text-4xl md:text-6xl font-bold mb-4 text-white font-orbitron tracking-wider"
               data-text="YOUR TOURNAMENTS">
             📋 YOUR TOURNAMENTS
@@ -215,6 +303,75 @@ const TournamentResume: React.FC<TournamentResumeProps> = ({
           </div>
         )}
 
+        {/* Search and Filter Controls */}
+        <div className="fade-up fade-up-delay-4 max-w-6xl mx-auto w-full mb-8">
+          <div className="bg-gray-900/50 border border-gray-700 rounded-xl p-4 backdrop-blur-sm">
+            <div className="flex flex-col md:flex-row gap-4">
+              {/* Search */}
+              <div className="flex-1 relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search tournaments..."
+                  className="block w-full pl-10 pr-10 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 font-jetbrains"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                )}
+              </div>
+              
+              {/* Status Filter */}
+              <div className="flex items-center gap-2">
+                <Filter className="h-5 w-5 text-gray-400" />
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="bg-gray-800/50 border border-gray-600 rounded-lg px-3 py-2 text-white font-jetbrains focus:border-blue-500 focus:outline-none appearance-none"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="setup">Setup</option>
+                  <option value="registration">Registration</option>
+                  <option value="active">Active</option>
+                  <option value="completed">Completed</option>
+                  <option value="paused">Paused</option>
+                </select>
+              </div>
+              
+              {/* Sort By */}
+              <div className="flex items-center gap-2">
+                <span className="text-gray-400">Sort:</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as 'recent' | 'name' | 'date')}
+                  className="bg-gray-800/50 border border-gray-600 rounded-lg px-3 py-2 text-white font-jetbrains focus:border-blue-500 focus:outline-none appearance-none"
+                >
+                  <option value="recent">Recent Activity</option>
+                  <option value="name">Name</option>
+                  <option value="date">Date</option>
+                </select>
+              </div>
+              
+              {/* Export Button */}
+              <button
+                onClick={handleExportTournaments}
+                className="flex items-center gap-2 px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700/50 transition-all duration-200 font-jetbrains text-sm"
+              >
+                <Download className="h-4 w-4" />
+                Export CSV
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* New Tournament Button */}
         <div className="fade-up fade-up-delay-4 max-w-6xl mx-auto w-full mb-8">
           <Button
@@ -227,10 +384,10 @@ const TournamentResume: React.FC<TournamentResumeProps> = ({
         </div>
 
         {/* Tournaments List */}
-        {tournaments.length > 0 ? (
+        {filteredTournaments.length > 0 ? (
           <div className="fade-up fade-up-delay-5 max-w-6xl mx-auto w-full mb-8">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {tournaments.map((tournament) => {
+              {filteredTournaments.map((tournament) => {
                 const statusBadge = getStatusBadge(tournament);
                 const progressPercentage = getProgressPercentage(tournament);
                 
@@ -367,18 +524,34 @@ const TournamentResume: React.FC<TournamentResumeProps> = ({
             <div className="bg-gray-900/50 border border-gray-700 rounded-xl p-12 text-center backdrop-blur-sm">
               <Trophy className="w-16 h-16 text-gray-500 mx-auto mb-4" />
               <h3 className="text-xl font-bold text-white font-orbitron mb-2">
-                No Tournaments Yet
+                {searchQuery || statusFilter !== 'all' 
+                  ? 'No tournaments match your filters' 
+                  : 'No Tournaments Yet'}
               </h3>
               <p className="text-gray-400 font-jetbrains mb-6">
-                Create your first tournament to get started
+                {searchQuery || statusFilter !== 'all'
+                  ? 'Try adjusting your search or filters'
+                  : 'Create your first tournament to get started'}
               </p>
-              <Button
-                icon={ArrowRight}
-                label="Create First Tournament"
-                onClick={onNewTournament}
-                variant="green"
-                className="max-w-sm mx-auto"
-              />
+              {(searchQuery || statusFilter !== 'all') ? (
+                <button
+                  onClick={() => {
+                    setSearchQuery('');
+                    setStatusFilter('all');
+                  }}
+                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-jetbrains font-medium transition-all duration-200"
+                >
+                  Clear Filters
+                </button>
+              ) : (
+                <Button
+                  icon={ArrowRight}
+                  label="Create First Tournament"
+                  onClick={onNewTournament}
+                  variant="green"
+                  className="max-w-sm mx-auto"
+                />
+              )}
             </div>
           </div>
         )}
