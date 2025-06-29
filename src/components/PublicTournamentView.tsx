@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, RefreshCw, Filter, Search, X, Download, ChevronDown, Eye, BarChart3 } from 'lucide-react';
 import ParticleBackground from './ParticleBackground';
+import AdMarquee from './AdMarquee';
 import PlayerDetailsModal from './PlayerDetailsModal';
 import TournamentHeader from './TournamentHeader';
 import PlayerLink from './PlayerLink';
@@ -551,6 +552,9 @@ const PublicTournamentView: React.FC = () => {
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 relative overflow-hidden">
         <ParticleBackground />
         
+        {/* Ad Marquee */}
+        <AdMarquee />
+        
         <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 py-8">
           <div className="max-w-md w-full bg-gray-900/80 backdrop-blur-xl border border-purple-500/30 rounded-2xl p-8 shadow-2xl">
             <div className="text-center mb-8">
@@ -595,7 +599,7 @@ const PublicTournamentView: React.FC = () => {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 font-jetbrains"
+                  className="w-full px-4 py-3 bg-gray-800/50 border-2 border-gray-600/50 rounded-xl text-white font-jetbrains focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all duration-300 backdrop-blur-sm"
                   placeholder="Tournament password"
                 />
                 {passwordError && (
@@ -631,6 +635,9 @@ const PublicTournamentView: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 relative overflow-hidden">
       <ParticleBackground />
+      
+      {/* Ad Marquee */}
+      <AdMarquee />
       
       {/* Tournament Header */}
       <TournamentHeader

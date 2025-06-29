@@ -168,6 +168,25 @@
   .border-l-3 {
     border-left-width: 3px;
   }
+
+  /* Marquee animation for ads */
+  @keyframes marquee {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(-50%);
+    }
+  }
+  
+  .animate-marquee {
+    animation: marquee 30s linear infinite;
+  }
+  
+  .marquee-container {
+    overflow: hidden;
+    width: 100%;
+  }
 }
 
 @keyframes float {

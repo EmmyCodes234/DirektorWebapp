@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, UserPlus, Trophy, Zap, Users, Target, Star, ChevronRight } from 'lucide-react';
+import { Trophy, Zap, Users, Target, Star } from 'lucide-react';
 import ParticleBackground from './ParticleBackground';
+import AdMarquee from './AdMarquee';
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 
@@ -95,6 +96,9 @@ const HomePage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-black relative overflow-hidden">
+      {/* Ad Marquee */}
+      <AdMarquee />
+      
       {/* Particle Background */}
       <ParticleBackground />
       
@@ -122,26 +126,10 @@ const HomePage: React.FC = () => {
                 onClick={handleSignOut}
                 className="flex items-center gap-2 px-4 py-2 bg-gray-800/80 backdrop-blur-lg text-gray-300 hover:text-white rounded-lg border border-gray-700/50 hover:border-gray-600/50 transition-all duration-200"
               >
-                <LogOut size={16} />
                 Sign Out
               </button>
             </div>
-          ) : (
-            <div className="flex items-center gap-4">
-              <button
-                onClick={handleSignIn}
-                className="px-4 py-2 bg-blue-600/20 border border-blue-500/50 text-blue-400 hover:bg-blue-600/30 hover:text-white rounded-lg font-jetbrains text-sm transition-all duration-200"
-              >
-                Sign In
-              </button>
-              <button
-                onClick={handleSignUp}
-                className="px-4 py-2 bg-green-600/20 border border-green-500/50 text-green-400 hover:bg-green-600/30 hover:text-white rounded-lg font-jetbrains text-sm transition-all duration-200"
-              >
-                Sign Up
-              </button>
-            </div>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -195,7 +183,6 @@ const HomePage: React.FC = () => {
               className="group relative overflow-hidden neon-glow border-2 border-blue-500 bg-blue-500/20 backdrop-blur-sm px-8 py-4 rounded-xl font-semibold text-lg tracking-wide text-blue-400 hover:text-white hover:bg-blue-500/30 transition-all duration-300 ease-out hover:scale-105 active:scale-95 flex items-center justify-center gap-3 min-w-[200px] font-orbitron"
             >
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform -skew-x-12 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
-              <LogOut size={24} className="relative z-10" />
               <span className="relative z-10">Sign In</span>
             </button>
             
@@ -204,7 +191,6 @@ const HomePage: React.FC = () => {
               className="group relative overflow-hidden neon-glow-green border-2 border-green-500 bg-green-500/20 backdrop-blur-sm px-8 py-4 rounded-xl font-semibold text-lg tracking-wide text-green-400 hover:text-white hover:bg-green-500/30 transition-all duration-300 ease-out hover:scale-105 active:scale-95 flex items-center justify-center gap-3 min-w-[200px] font-orbitron"
             >
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform -skew-x-12 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
-              <UserPlus size={24} className="relative z-10" />
               <span className="relative z-10">Sign Up</span>
             </button>
           </div>

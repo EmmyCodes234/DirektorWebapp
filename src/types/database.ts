@@ -301,6 +301,19 @@ export interface PlayerWithStats extends Player {
   highest_score?: number;
 }
 
+// Advertisement System Types
+export interface Ad {
+  id: string;
+  text: string;
+  url?: string;
+  active: boolean;
+  priority?: number;
+  start_date: string;
+  end_date: string;
+  countries?: string[];
+  created_at: string;
+}
+
 // Add global types for Speech Recognition
 declare global {
   interface Window {

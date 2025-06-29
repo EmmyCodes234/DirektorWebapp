@@ -11,6 +11,7 @@ import { useOnboarding } from '../hooks/useOnboarding';
 import { useTournamentDraftSystem } from '../hooks/useTournamentDraftSystem';
 import UserProfileCard from './UserProfileCard';
 import ProfileEditor from './ProfileEditor';
+import AdMarquee from './AdMarquee';
 
 // Lazy-loaded components
 const TournamentResume = React.lazy(() => import('./TournamentResume'));
@@ -291,168 +292,183 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
   // Render dashboard content
   if (activeSection === 'dashboard') {
     return (
-      <DashboardLayout 
-        title="Welcome Back" 
-        subtitle={profile?.full_name || profile?.username || user.email}
-        fabActions={fabActions}
-      >
-        {/* Draft Recovery Dialog */}
-        <DraftRecoveryDialog
-          isOpen={showDraftRecovery}
-          onClose={() => setShowDraftRecovery(false)}
-          drafts={drafts}
-          onResumeDraft={handleResumeDraft}
-          onDiscardDraft={handleDiscardDraft}
-          onRenameDraft={renameDraft}
-          isLoading={isDraftsLoading}
-        />
+      <>
+        {/* Ad Marquee */}
+        <AdMarquee />
         
-        {/* Connection Error Message */}
-        {connectionError && (
-          <div className="max-w-4xl mx-auto w-full mb-8">
-            <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-4 text-red-300 font-jetbrains text-sm">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="font-semibold">Connection Error</span>
-              </div>
-              <p className="mb-3">{connectionError}</p>
-              <div className="space-y-2">
-                <button
-                  onClick={handleRetryConnection}
-                  className="px-3 py-1 bg-red-600/20 border border-red-500/50 rounded text-red-200 hover:bg-red-600/30 transition-colors duration-200 mr-2"
-                >
-                  Retry Connection
-                </button>
-                <div className="text-xs text-red-400 mt-2">
-                  <p>Troubleshooting tips:</p>
-                  <ul className="list-disc list-inside mt-1 space-y-1">
-                    <li>Check your internet connection</li>
-                    <li>Try refreshing the page</li>
-                    <li>Disable browser extensions that might block requests</li>
-                    <li>Try using a different browser or incognito mode</li>
-                  </ul>
+        <DashboardLayout 
+          title="Welcome Back" 
+          subtitle={profile?.full_name || profile?.username || user.email}
+          fabActions={fabActions}
+        >
+          {/* Draft Recovery Dialog */}
+          <DraftRecoveryDialog
+            isOpen={showDraftRecovery}
+            onClose={() => setShowDraftRecovery(false)}
+            drafts={drafts}
+            onResumeDraft={handleResumeDraft}
+            onDiscardDraft={handleDiscardDraft}
+            onRenameDraft={renameDraft}
+            isLoading={isDraftsLoading}
+          />
+          
+          {/* Connection Error Message */}
+          {connectionError && (
+            <div className="max-w-4xl mx-auto w-full mb-8">
+              <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-4 text-red-300 font-jetbrains text-sm">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="font-semibold">Connection Error</span>
+                </div>
+                <p className="mb-3">{connectionError}</p>
+                <div className="space-y-2">
+                  <button
+                    onClick={handleRetryConnection}
+                    className="px-3 py-1 bg-red-600/20 border border-red-500/50 rounded text-red-200 hover:bg-red-600/30 transition-colors duration-200 mr-2"
+                  >
+                    Retry Connection
+                  </button>
+                  <div className="text-xs text-red-400 mt-2">
+                    <p>Troubleshooting tips:</p>
+                    <ul className="list-disc list-inside mt-1 space-y-1">
+                      <li>Check your internet connection</li>
+                      <li>Try refreshing the page</li>
+                      <li>Disable browser extensions that might block requests</li>
+                      <li>Try using a different browser or incognito mode</li>
+                    </ul>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Error Message */}
-        {error && (
-          <div className="max-w-4xl mx-auto w-full mb-8">
-            <div className="bg-yellow-900/30 border border-yellow-500/50 rounded-lg p-4 text-yellow-300 font-jetbrains text-sm">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="font-semibold">Profile Error</span>
+          {/* Error Message */}
+          {error && (
+            <div className="max-w-4xl mx-auto w-full mb-8">
+              <div className="bg-yellow-900/30 border border-yellow-500/50 rounded-lg p-4 text-yellow-300 font-jetbrains text-sm">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="font-semibold">Profile Error</span>
+                </div>
+                <p>{error}</p>
+                <button
+                  onClick={handleRetryConnection}
+                  className="mt-2 px-3 py-1 bg-yellow-600/20 border border-yellow-500/50 rounded text-yellow-200 hover:bg-yellow-600/30 transition-colors duration-200"
+                >
+                  Retry
+                </button>
               </div>
-              <p>{error}</p>
-              <button
-                onClick={handleRetryConnection}
-                className="mt-2 px-3 py-1 bg-yellow-600/20 border border-yellow-500/50 rounded text-yellow-200 hover:bg-yellow-600/30 transition-colors duration-200"
-              >
-                Retry
-              </button>
             </div>
-          </div>
-        )}
-        
-        {/* Draft Manager */}
-        <DraftManager
-          onCreateNew={handleNewTournament}
-          showRecoveryPrompt={false}
-        />
-
-        {/* Dashboard Cards */}
-        <div className="fade-up fade-up-delay-4 grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Create Tournament Card */}
-          <div 
-            className="bg-gradient-to-br from-blue-900/30 to-purple-900/30 border border-blue-500/30 rounded-xl p-6 hover:border-blue-500/50 transition-all duration-300 cursor-pointer"
-            onClick={handleNewTournament}
-            data-onboarding="create-tournament"
-          >
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
-                <Plus className="w-6 h-6 text-white" />
-              </div>
-              <h3 className="text-xl font-bold text-white font-orbitron">Create Tournament</h3>
-            </div>
-            <p className="text-gray-300 font-jetbrains mb-4">
-              Start a new tournament with customizable settings for teams, divisions, and pairing systems.
-            </p>
-            <div className="text-blue-400 font-jetbrains text-sm">
-              Click to get started →
-            </div>
-          </div>
+          )}
           
-          {/* User Profile Card */}
-          <UserProfileCard 
-            profile={profile}
-            userEmail={user.email || ''}
-            onEditProfile={handleEditProfile}
+          {/* Draft Manager */}
+          <DraftManager
+            onCreateNew={handleNewTournament}
+            showRecoveryPrompt={false}
           />
-        </div>
 
-        {/* Tournament Setup Modal */}
-        <TournamentSetupModal
-          isOpen={showTournamentModal}
-          onClose={() => setShowTournamentModal(false)}
-          onSuccess={handleTournamentCreated}
-          draftId={selectedDraftId || undefined}
-        />
-        
-        {/* Profile Editor Modal */}
-        <ProfileEditor
-          isOpen={showProfileModal}
-          onClose={() => setShowProfileModal(false)}
-          userId={user.id}
-          userEmail={user.email || ''}
-          onProfileUpdated={loadUserProfile}
-        />
-        
-        {/* Reset Onboarding Button (for testing) */}
-        <div className="mt-8 text-center">
-          <button
-            onClick={resetOnboarding}
-            className="text-gray-500 hover:text-gray-400 text-xs font-jetbrains"
-          >
-            Reset Onboarding
-          </button>
-        </div>
-      </DashboardLayout>
+          {/* Dashboard Cards */}
+          <div className="fade-up fade-up-delay-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Create Tournament Card */}
+            <div 
+              className="bg-gradient-to-br from-blue-900/30 to-purple-900/30 border border-blue-500/30 rounded-xl p-6 hover:border-blue-500/50 transition-all duration-300 cursor-pointer"
+              onClick={handleNewTournament}
+              data-onboarding="create-tournament"
+            >
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
+                  <Plus className="w-6 h-6 text-white" />
+                </div>
+                <h3 className="text-xl font-bold text-white font-orbitron">Create Tournament</h3>
+              </div>
+              <p className="text-gray-300 font-jetbrains mb-4">
+                Start a new tournament with customizable settings for teams, divisions, and pairing systems.
+              </p>
+              <div className="text-blue-400 font-jetbrains text-sm">
+                Click to get started →
+              </div>
+            </div>
+            
+            {/* User Profile Card */}
+            <UserProfileCard 
+              profile={profile}
+              userEmail={user.email || ''}
+              onEditProfile={handleEditProfile}
+            />
+          </div>
+
+          {/* Tournament Setup Modal */}
+          <TournamentSetupModal
+            isOpen={showTournamentModal}
+            onClose={() => setShowTournamentModal(false)}
+            onSuccess={handleTournamentCreated}
+            draftId={selectedDraftId || undefined}
+          />
+          
+          {/* Profile Editor Modal */}
+          <ProfileEditor
+            isOpen={showProfileModal}
+            onClose={() => setShowProfileModal(false)}
+            userId={user.id}
+            userEmail={user.email || ''}
+            onProfileUpdated={loadUserProfile}
+          />
+          
+          {/* Reset Onboarding Button (for testing) */}
+          <div className="mt-8 text-center">
+            <button
+              onClick={resetOnboarding}
+              className="text-gray-500 hover:text-gray-400 text-xs font-jetbrains"
+            >
+              Reset Onboarding
+            </button>
+          </div>
+        </DashboardLayout>
+      </>
     );
   }
 
   // Resume Tournament View
   if (activeSection === 'resume-tournament') {
     return (
-      <DashboardLayout 
-        title="Your Tournaments" 
-        subtitle="Resume or manage your tournaments"
-      >
-        <Suspense fallback={
-          <div className="flex items-center justify-center py-12">
-            <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-          </div>
-        }>
-          <TournamentResume
-            onNewTournament={handleNewTournament}
-            onResumeTournament={handleResumeTournament}
-          />
-        </Suspense>
-      </DashboardLayout>
+      <>
+        {/* Ad Marquee */}
+        <AdMarquee />
+        
+        <DashboardLayout 
+          title="Your Tournaments" 
+          subtitle="Resume or manage your tournaments"
+        >
+          <Suspense fallback={
+            <div className="flex items-center justify-center py-12">
+              <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            </div>
+          }>
+            <TournamentResume
+              onNewTournament={handleNewTournament}
+              onResumeTournament={handleResumeTournament}
+            />
+          </Suspense>
+        </DashboardLayout>
+      </>
     );
   }
 
   // Fallback for other sections
   return (
-    <DashboardLayout 
-      title="Dashboard" 
-      subtitle="Your tournament management hub"
-    >
-      <div className="text-center py-12">
-        <p className="text-gray-400 font-jetbrains">
-          This section is under development
-        </p>
-      </div>
-    </DashboardLayout>
+    <>
+      {/* Ad Marquee */}
+      <AdMarquee />
+      
+      <DashboardLayout 
+        title="Dashboard" 
+        subtitle="Your tournament management hub"
+      >
+        <div className="text-center py-12">
+          <p className="text-gray-400 font-jetbrains">
+            This section is under development
+          </p>
+        </div>
+      </DashboardLayout>
+    </>
   );
 };
 
