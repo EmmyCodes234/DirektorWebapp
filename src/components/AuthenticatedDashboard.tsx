@@ -221,7 +221,11 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
 
   const handleRetryConnection = async () => {
     setConnectionError(null);
-    await checkExistingTournaments();
+    setError(null);
+    await Promise.all([
+      checkExistingTournaments(),
+      loadUserProfile()
+    ]);
   };
 
   // FAB actions
@@ -293,6 +297,12 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
           <div className="max-w-4xl mx-auto w-full mb-8">
             <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-4 text-red-300 font-jetbrains text-sm">
               {error}
+              <button
+                onClick={handleRetryConnection}
+                className="mt-2 px-3 py-1 bg-red-600/20 border border-red-500/50 rounded text-red-200 hover:bg-red-600/30 transition-colors duration-200 block"
+              >
+                Retry Connection
+              </button>
             </div>
           </div>
         )}
