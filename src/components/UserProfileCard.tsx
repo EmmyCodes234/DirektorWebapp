@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Edit3, Globe, Flag } from 'lucide-react';
+import { User, Edit3, Mail, MapPin } from 'lucide-react';
 
 interface UserProfileCardProps {
   profile: {
@@ -63,9 +63,10 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({ profile, userEmail, o
             </p>
           )}
           
-          <p className="text-gray-400 font-jetbrains text-sm mb-2">
-            {userEmail}
-          </p>
+          <div className="flex items-center justify-center gap-2 text-gray-400 font-jetbrains text-sm mb-2">
+            <Mail className="w-4 h-4" />
+            <span>{userEmail}</span>
+          </div>
           
           {profile?.country && COUNTRY_FLAGS[profile.country] && (
             <div className="flex items-center justify-center gap-2 text-gray-300 mt-3">
@@ -73,7 +74,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({ profile, userEmail, o
                 {COUNTRY_FLAGS[profile.country]}
               </span>
               <span className="font-jetbrains text-sm">
-                {Object.entries(COUNTRY_CODES).find(([code]) => code === profile.country)?.[1].split(' ').slice(1).join(' ')}
+                {profile.country}
               </span>
             </div>
           )}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, Upload, Save, X, Check, AlertTriangle, Globe, Flag } from 'lucide-react';
+import { User, Upload, Save, X, Check, AlertTriangle, Globe, Flag, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuditLog } from '../hooks/useAuditLog';
 
