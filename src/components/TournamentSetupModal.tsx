@@ -1,17 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, MapPin, Users, Trophy, Zap, Brain, Target, Save, UserCheck, ArrowRight, Lock, Eye, EyeOff, Share2 } from 'lucide-react';
+import { X, Trophy, ArrowRight, ArrowLeft, Check, AlertTriangle, Users, Calendar, MapPin, Zap, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { WizardResponses, TournamentConfig, PairingFormat } from '../types/database';
-import { recommendPairingSystem } from '../utils/pairingStrategyIntelligence';
 import { useAuditLog } from '../hooks/useAuditLog';
 import { generateTournamentSlug } from '../utils/slugify';
-import { useTournamentDrafts } from '../hooks/useTournamentDrafts';
+import { createDefaultTriumvirateConfig } from '../utils/triumvirateAlgorithms';
 
 interface TournamentSetupModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (tournamentId: string) => void;
-  initialDraftId?: string;
+  draftId?: string;
 }
 
 interface FormData {
@@ -20,576 +18,238 @@ interface FormData {
   venue: string;
   rounds: number;
   divisions: number;
-  divisionNames: string[];
   teamMode: boolean;
-  isPasswordProtected: boolean;
-  password: string;
-  publicSharingEnabled: boolean;
-  showPassword: boolean;
+  triumvirateMode: boolean;
 }
-
-interface WizardStep {
-  id: string;
-  question: string;
-  description: string;
-  options: Array<{
-    value: string;
-    label: string;
-    description: string;
-  }>;
-}
-
-const WIZARD_STEPS: WizardStep[] = [
-  {
-    id: 'topPlayersMeeting',
-    question: 'When should the top players meet?',
-    description: 'This affects tournament excitement and fairness',
-    options: [
-      {
-        value: 'early',
-        label: 'Early rounds',
-        description: 'Top players face each other immediately (King of the Hill style)'
-      },
-      {
-        value: 'late',
-        label: 'Later rounds',
-        description: 'Top players meet after building records (Swiss style)'
-      },
-      {
-        value: 'mixed',
-        label: 'Mixed approach',
-        description: 'Balance between early excitement and late suspense'
-      }
-    ]
-  },
-  {
-    id: 'avoidRematches',
-    question: 'Should players avoid playing the same opponent twice?',
-    description: 'Rematch avoidance vs. optimal skill matching',
-    options: [
-      {
-        value: 'yes',
-        label: 'Yes, avoid rematches',
-        description: 'Players should face different opponents each round'
-      },
-      {
-        value: 'no',
-        label: 'Allow rematches if needed',
-        description: 'Prioritize skill-based pairings over rematch avoidance'
-      }
-    ]
-  },
-  {
-    id: 'suspenseUntilEnd',
-    question: 'How important is suspense until the final round?',
-    description: 'Tournament excitement vs. predictable outcomes',
-    options: [
-      {
-        value: 'critical',
-        label: 'Critical - maximum suspense',
-        description: 'Anyone should be able to win until the very end'
-      },
-      {
-        value: 'important',
-        label: 'Important but not critical',
-        description: 'Some suspense while maintaining fairness'
-      },
-      {
-        value: 'minimal',
-        label: 'Not important',
-        description: 'Focus on fair rankings over suspense'
-      }
-    ]
-  },
-  {
-    id: 'competitiveLevel',
-    question: 'What is the competitive level of this tournament?',
-    description: 'This affects pairing strategy recommendations',
-    options: [
-      {
-        value: 'casual',
-        label: 'Casual/Recreational',
-        description: 'Fun-focused event with mixed skill levels'
-      },
-      {
-        value: 'competitive',
-        label: 'Competitive',
-        description: 'Serious tournament with skilled players'
-      },
-      {
-        value: 'elite',
-        label: 'Elite/Professional',
-        description: 'High-level competition with expert players'
-      }
-    ]
-  }
-];
-
-const PAIRING_FORMATS: Array<{
-  id: PairingFormat;
-  name: string;
-  description: string;
-  bestFor: string;
-}> = [
-  {
-    id: 'swiss',
-    name: 'Swiss System',
-    description: 'Standard tournament format pairing players with similar records',
-    bestFor: 'Most competitive tournaments'
-  },
-  {
-    id: 'fonte-swiss',
-    name: 'Fonte-Swiss',
-    description: 'Advanced Swiss with score-group pairing for maximum fairness',
-    bestFor: 'Elite competitive events'
-  },
-  {
-    id: 'king-of-hill',
-    name: 'King of the Hill',
-    description: 'Highest vs lowest ranked players for maximum suspense',
-    bestFor: 'Casual, exciting tournaments'
-  },
-  {
-    id: 'round-robin',
-    name: 'Round Robin',
-    description: 'Every player plays every other player once',
-    bestFor: 'Small tournaments (8 players or fewer)'
-  },
-  {
-    id: 'quartile',
-    name: 'Quartile Pairing',
-    description: 'Split players into quartiles and pair within groups',
-    bestFor: 'Mixed-skill recreational events'
-  }
-];
-
-const DEFAULT_FORM_DATA: FormData = {
-  name: '',
-  date: '',
-  venue: '',
-  rounds: 7,
-  divisions: 1,
-  divisionNames: ['Main Division'],
-  teamMode: false,
-  isPasswordProtected: false,
-  password: '',
-  publicSharingEnabled: true,
-  showPassword: false
-};
 
 const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
-  initialDraftId
+  draftId
 }) => {
-  const [currentStep, setCurrentStep] = useState<'basic' | 'pairing-method' | 'wizard' | 'manual-selection' | 'review'>('basic');
-  const [wizardStepIndex, setWizardStepIndex] = useState(0);
+  const [step, setStep] = useState<'basic' | 'pairing-method' | 'wizard' | 'manual-selection' | 'review'>('basic');
+  const [formData, setFormData] = useState<FormData>({
+    name: '',
+    date: new Date().toISOString().split('T')[0],
+    venue: '',
+    rounds: 7,
+    divisions: 1,
+    teamMode: false,
+    triumvirateMode: false
+  });
+  const [pairingSystem, setPairingSystem] = useState<string>('swiss');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [draftId, setDraftId] = useState<string | undefined>(initialDraftId);
-  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-
-  // Form data
-  const [formData, setFormData] = useState<FormData>(DEFAULT_FORM_DATA);
-
-  // Wizard responses
-  const [wizardResponses, setWizardResponses] = useState<Partial<WizardResponses>>({});
-  const [selectedPairingFormat, setSelectedPairingFormat] = useState<PairingFormat>('swiss');
-  const [recommendedSystem, setRecommendedSystem] = useState<PairingFormat>('swiss');
-  const [recommendationReasoning, setRecommendationReasoning] = useState<string>('');
-
+  const [draftLoaded, setDraftLoaded] = useState(false);
+  
   const { logAction } = useAuditLog();
-  const { saveDraft, getDraft, completeDraft } = useTournamentDrafts();
 
-  // Load draft data if initialDraftId is provided
   useEffect(() => {
-    const loadDraft = async () => {
-      if (initialDraftId) {
-        setDraftId(initialDraftId);
-        const draft = await getDraft(initialDraftId);
-        if (draft) {
-          // Restore form data
-          if (draft.data.formData) {
-            setFormData(draft.data.formData);
-          }
-          
-          // Restore wizard responses
-          if (draft.data.wizardResponses) {
-            setWizardResponses(draft.data.wizardResponses);
-          }
-          
-          // Restore pairing format
-          if (draft.data.selectedPairingFormat) {
-            setSelectedPairingFormat(draft.data.selectedPairingFormat);
-          }
-          
-          // Restore recommended system
-          if (draft.data.recommendedSystem) {
-            setRecommendedSystem(draft.data.recommendedSystem);
-          }
-          
-          // Restore recommendation reasoning
-          if (draft.data.recommendationReasoning) {
-            setRecommendationReasoning(draft.data.recommendationReasoning);
-          }
-          
-          // Restore current step
-          if (draft.data.currentStep) {
-            setCurrentStep(draft.data.currentStep);
-          }
-          
-          // Restore wizard step index
-          if (draft.data.wizardStepIndex !== undefined) {
-            setWizardStepIndex(draft.data.wizardStepIndex);
-          }
-        }
-      }
-    };
-    
-    if (isOpen) {
-      loadDraft();
+    if (isOpen && draftId) {
+      loadDraft(draftId);
+    } else if (isOpen) {
+      // Reset form when opening without a draft
+      setFormData({
+        name: '',
+        date: new Date().toISOString().split('T')[0],
+        venue: '',
+        rounds: 7,
+        divisions: 1,
+        teamMode: false,
+        triumvirateMode: false
+      });
+      setStep('basic');
+      setDraftLoaded(false);
     }
-  }, [isOpen, initialDraftId, getDraft]);
+  }, [isOpen, draftId]);
 
-  // Auto-save draft when form data changes
-  useEffect(() => {
-    const saveTimeout = setTimeout(async () => {
-      if (isOpen && (formData.name || Object.keys(wizardResponses).length > 0)) {
-        setAutoSaveStatus('saving');
-        
-        const draftData = {
-          formData,
-          wizardResponses,
-          selectedPairingFormat,
-          recommendedSystem,
-          recommendationReasoning,
-          currentStep,
-          wizardStepIndex
-        };
-        
-        const savedDraftId = await saveDraft(draftData, draftId);
-        
-        if (savedDraftId) {
-          setDraftId(savedDraftId);
-          setAutoSaveStatus('saved');
-          
-          // Reset to idle after a delay
-          setTimeout(() => {
-            setAutoSaveStatus('idle');
-          }, 2000);
-        } else {
-          setAutoSaveStatus('error');
-        }
-      }
-    }, 1500);
-    
-    return () => clearTimeout(saveTimeout);
-  }, [formData, wizardResponses, selectedPairingFormat, recommendedSystem, recommendationReasoning, currentStep, wizardStepIndex, isOpen, draftId, saveDraft]);
-
-  const handleInputChange = (field: keyof FormData, value: string | number | boolean) => {
-    setFormData(prev => {
-      const updated = { ...prev, [field]: value };
+  const loadDraft = async (draftId: string) => {
+    try {
+      setIsLoading(true);
+      setError(null);
       
-      // Update division names when division count changes
-      if (field === 'divisions') {
-        const divisionCount = value as number;
-        const newDivisionNames = Array.from({ length: divisionCount }, (_, i) => {
-          return prev.divisionNames[i] || `Division ${String.fromCharCode(65 + i)}`;
+      const { data, error } = await supabase
+        .from('tournament_drafts')
+        .select('*')
+        .eq('id', draftId)
+        .single();
+        
+      if (error) throw error;
+      
+      if (data && data.data) {
+        // Restore form data from draft
+        setFormData({
+          name: data.data.name || '',
+          date: data.data.date || new Date().toISOString().split('T')[0],
+          venue: data.data.venue || '',
+          rounds: data.data.rounds || 7,
+          divisions: data.data.divisions || 1,
+          teamMode: data.data.teamMode || false,
+          triumvirateMode: data.data.triumvirateMode || false
         });
-        updated.divisionNames = newDivisionNames;
+        
+        setPairingSystem(data.data.pairingSystem || 'swiss');
+        setStep(data.data.step || 'basic');
+        setDraftLoaded(true);
+        
+        // Log draft loaded
+        logAction({
+          action: 'tournament_draft_loaded',
+          details: {
+            draft_id: draftId,
+            draft_name: data.data.name || 'Untitled Tournament'
+          }
+        });
+      }
+    } catch (err: any) {
+      console.error('Error loading draft:', err);
+      setError('Failed to load draft: ' + err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    
+    if (type === 'checkbox') {
+      const checked = (e.target as HTMLInputElement).checked;
+      setFormData(prev => ({ ...prev, [name]: checked }));
+    } else if (name === 'rounds' || name === 'divisions') {
+      setFormData(prev => ({ ...prev, [name]: parseInt(value) || 0 }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const handleCheckboxChange = (name: string, checked: boolean) => {
+    setFormData(prev => {
+      // If turning on triumvirateMode, also turn on teamMode and set rounds to 30
+      if (name === 'triumvirateMode' && checked) {
+        return { 
+          ...prev, 
+          [name]: checked, 
+          teamMode: true,
+          rounds: 30
+        };
       }
       
-      return updated;
+      // If turning off teamMode, also turn off triumvirateMode
+      if (name === 'teamMode' && !checked) {
+        return { ...prev, [name]: checked, triumvirateMode: false };
+      }
+      
+      return { ...prev, [name]: checked };
     });
   };
 
-  const handleDivisionNameChange = (index: number, name: string) => {
-    setFormData(prev => ({
-      ...prev,
-      divisionNames: prev.divisionNames.map((n, i) => i === index ? name : n)
-    }));
-  };
-
-  const validateBasicForm = (): boolean => {
+  const validateBasicInfo = (): boolean => {
     if (!formData.name.trim()) {
       setError('Tournament name is required');
       return false;
     }
-    if (!formData.date) {
-      setError('Tournament date is required');
+    
+    if (formData.rounds < 1) {
+      setError('Tournament must have at least 1 round');
       return false;
     }
-    if (formData.rounds < 1 || formData.rounds > 15) {
-      setError('Number of rounds must be between 1 and 15');
+    
+    if (formData.divisions < 1) {
+      setError('Tournament must have at least 1 division');
       return false;
     }
-    if (formData.divisions < 1 || formData.divisions > 10) {
-      setError('Number of divisions must be between 1 and 10');
-      return false;
-    }
-    for (let i = 0; i < formData.divisions; i++) {
-      if (!formData.divisionNames[i]?.trim()) {
-        setError(`Division ${i + 1} name is required`);
+    
+    // If triumvirate mode is enabled, validate specific requirements
+    if (formData.triumvirateMode) {
+      if (formData.rounds !== 30) {
+        setError('Triumvirate mode requires exactly 30 rounds');
         return false;
       }
     }
-    if (formData.isPasswordProtected && !formData.password.trim()) {
-      setError('Password is required when password protection is enabled');
-      return false;
-    }
+    
     return true;
   };
 
-  const handleBasicNext = () => {
+  const handleNext = () => {
     setError(null);
-    if (validateBasicForm()) {
-      // If team mode is selected, skip pairing method selection and go directly to review
-      if (formData.teamMode) {
-        setSelectedPairingFormat('team-round-robin');
-        setRecommendedSystem('team-round-robin');
-        setRecommendationReasoning('Team Round-Robin is automatically selected for team-based tournaments, ensuring each team plays every other team with all possible player matchups.');
-        setCurrentStep('review');
-      } else {
-        setCurrentStep('pairing-method');
-      }
-    }
-  };
-
-  const handlePairingMethodSelection = (method: 'wizard' | 'manual') => {
-    if (method === 'wizard') {
-      setCurrentStep('wizard');
-      setWizardStepIndex(0);
+    
+    if (step === 'basic') {
+      if (!validateBasicInfo()) return;
       
-      // Log wizard selection
-      logAction({
-        action: 'pairing_wizard_started',
-        details: {
-          tournament_name: formData.name
-        }
-      });
-    } else {
-      setCurrentStep('manual-selection');
+      // If triumvirate mode is enabled, skip to review
+      if (formData.triumvirateMode) {
+        setStep('review');
+        return;
+      }
       
-      // Log manual selection
-      logAction({
-        action: 'manual_pairing_selected',
-        details: {
-          tournament_name: formData.name
-        }
-      });
+      setStep('pairing-method');
+    } else if (step === 'pairing-method') {
+      setStep('review');
     }
   };
 
-  const handleWizardResponse = (value: string) => {
-    const currentWizardStep = WIZARD_STEPS[wizardStepIndex];
-    const updatedResponses = {
-      ...wizardResponses,
-      [currentWizardStep.id]: value
-    };
-    setWizardResponses(updatedResponses);
+  const handleBack = () => {
+    setError(null);
     
-    // Log wizard response
-    logAction({
-      action: 'pairing_wizard_response',
-      details: {
-        question: currentWizardStep.id,
-        response: value,
-        step: wizardStepIndex + 1,
-        total_steps: WIZARD_STEPS.length
+    if (step === 'pairing-method') {
+      setStep('basic');
+    } else if (step === 'review') {
+      // If triumvirate mode is enabled, go back to basic
+      if (formData.triumvirateMode) {
+        setStep('basic');
+        return;
       }
-    });
-
-    if (wizardStepIndex < WIZARD_STEPS.length - 1) {
-      setWizardStepIndex(wizardStepIndex + 1);
-    } else {
-      // Wizard complete, generate recommendation
-      generateRecommendation(updatedResponses);
-      setCurrentStep('review');
       
-      // Log wizard completion
-      logAction({
-        action: 'pairing_wizard_completed',
-        details: {
-          responses: updatedResponses
-        }
-      });
+      setStep('pairing-method');
     }
-  };
-
-  const handleManualSelection = (format: PairingFormat) => {
-    setSelectedPairingFormat(format);
-    setRecommendedSystem(format);
-    setRecommendationReasoning(`You manually selected ${format.charAt(0).toUpperCase() + format.slice(1).replace('-', ' ')} as your preferred pairing system.`);
-    setCurrentStep('review');
-    
-    // Log manual format selection
-    logAction({
-      action: 'pairing_format_selected',
-      details: {
-        format,
-        selection_method: 'manual'
-      }
-    });
-  };
-
-  const generateRecommendation = (responses: Partial<WizardResponses>) => {
-    // Convert wizard responses to DirectorIntent
-    const priorityGoals: string[] = [];
-    
-    if (responses.topPlayersMeeting === 'late') {
-      priorityGoals.push('aristomachy');
-    }
-    if (responses.avoidRematches === 'yes') {
-      priorityGoals.push('monagony');
-    }
-    if (responses.suspenseUntilEnd === 'critical') {
-      priorityGoals.push('suspense');
-    }
-    
-    // Always include fairness as important
-    priorityGoals.push('fairness');
-
-    const recommendation = recommendPairingSystem({
-      primary: responses.suspenseUntilEnd === 'critical' ? 'Max suspense' : 'Max fairness',
-      playerCount: 32, // Estimate
-      rounds: formData.rounds,
-      competitiveLevel: (responses.competitiveLevel as any) || 'competitive',
-      priorityGoals
-    });
-
-    setRecommendedSystem(recommendation.primary);
-    setSelectedPairingFormat(recommendation.primary);
-    setRecommendationReasoning(recommendation.reasoning);
-    
-    // Log recommendation
-    logAction({
-      action: 'pairing_recommendation_generated',
-      details: {
-        recommended_format: recommendation.primary,
-        reasoning: recommendation.reasoning,
-        wizard_responses: responses
-      }
-    });
   };
 
   const handleCreateTournament = async () => {
-    setIsLoading(true);
-    setError(null);
-
     try {
+      setIsLoading(true);
+      setError(null);
+      
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        throw new Error('You must be logged in to create a tournament');
+        throw new Error('You must be signed in to create a tournament');
       }
-
-      // Generate slug from tournament name
-      const baseSlug = generateTournamentSlug(formData.name);
       
-      // Check if slug already exists
-      const { data: existingTournament, error: slugCheckError } = await supabase
-        .from('tournaments')
-        .select('id')
-        .eq('slug', baseSlug)
-        .maybeSingle();
-        
-      if (slugCheckError) throw slugCheckError;
+      // Generate slug
+      const slug = generateTournamentSlug(formData.name);
       
-      // If slug exists, generate a unique one with ID
-      let slug = baseSlug;
-      if (existingTournament) {
-        // We'll append a unique ID after creation
-        slug = '';
-      }
-
-      // Prepare tournament data
-      const tournamentData = {
-        name: formData.name.trim(),
-        date: formData.date,
-        venue: formData.venue.trim() || null,
+      // Create tournament
+      const tournamentData: any = {
+        name: formData.name,
+        date: formData.date || null,
+        venue: formData.venue || null,
         rounds: formData.rounds,
         divisions: formData.divisions,
         director_id: user.id,
-        status: 'registration' as const,
+        current_round: 1,
+        status: 'setup',
         team_mode: formData.teamMode,
-        slug, // Will be updated if needed after creation
-        password: formData.isPasswordProtected ? formData.password : null,
-        public_sharing_enabled: formData.publicSharingEnabled,
-        wizard_responses: {
-          ...wizardResponses,
-          topPlayersMeeting: wizardResponses.topPlayersMeeting || 'late',
-          avoidRematches: wizardResponses.avoidRematches === 'yes',
-          avoidSameTeam: formData.teamMode,
-          suspenseUntilEnd: wizardResponses.suspenseUntilEnd === 'critical',
-          manualPairing: false,
-          competitiveLevel: wizardResponses.competitiveLevel || 'competitive',
-          primaryGoal: wizardResponses.suspenseUntilEnd === 'critical' ? 'Max suspense' : 'Max fairness'
-        } as WizardResponses,
-        tournament_config: {
-          pairing_system: selectedPairingFormat,
-          avoid_rematches: wizardResponses.avoidRematches === 'yes',
-          wizard_completed: true,
-          recommended_system: recommendedSystem,
-          recommendation_reasoning: recommendationReasoning
-        } as TournamentConfig
+        pairing_system: pairingSystem,
+        slug
       };
-
-      // Create tournament
-      const { data: tournament, error: tournamentError } = await supabase
+      
+      // Add triumvirate mode fields if enabled
+      if (formData.triumvirateMode) {
+        tournamentData.triumvirate_mode = true;
+        tournamentData.triumvirate_phase = 1;
+        tournamentData.triumvirate_config = createDefaultTriumvirateConfig();
+        tournamentData.pairing_system = 'triumvirate';
+      }
+      
+      const { data: tournament, error: createError } = await supabase
         .from('tournaments')
         .insert([tournamentData])
         .select()
         .single();
-
-      if (tournamentError) throw tournamentError;
-      
-      // Determine final slug
-      let finalSlug = slug;
-      
-      // If we need to update the slug with a unique ID
-      if (!slug) {
-        finalSlug = generateTournamentSlug(formData.name, tournament.id);
         
-        const { error: slugUpdateError } = await supabase
-          .from('tournaments')
-          .update({ slug: finalSlug })
-          .eq('id', tournament.id);
-          
-        if (slugUpdateError) throw slugUpdateError;
-      }
-
-      // Create divisions if multiple
-      if (formData.divisions > 1) {
-        const divisionsToInsert = formData.divisionNames.map((name, index) => ({
-          tournament_id: tournament.id,
-          name: name.trim(),
-          division_number: index + 1
-        }));
-
-        const { error: divisionsError } = await supabase
-          .from('divisions')
-          .insert(divisionsToInsert);
-
-        if (divisionsError) throw divisionsError;
-      } else {
-        // Create single default division
-        const { error: divisionError } = await supabase
-          .from('divisions')
-          .insert([{
-            tournament_id: tournament.id,
-            name: formData.divisionNames[0] || 'Main Division',
-            division_number: 1
-          }]);
-
-        if (divisionError) throw divisionError;
-      }
-
-      // Mark draft as completed if we have a draft ID
-      if (draftId) {
-        await completeDraft(draftId);
-      }
-
+      if (createError) throw createError;
+      
       // Log tournament creation
       logAction({
         action: 'tournament_created',
@@ -597,50 +257,59 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
           tournament_id: tournament.id,
           tournament_name: tournament.name,
           team_mode: formData.teamMode,
-          pairing_system: selectedPairingFormat,
-          divisions: formData.divisions,
-          rounds: formData.rounds,
-          password_protected: formData.isPasswordProtected,
-          slug: finalSlug
+          triumvirate_mode: formData.triumvirateMode,
+          pairing_system: pairingSystem
         }
       });
-
-      // Success! Call the success callback with tournament ID
+      
+      // If draft was used, mark it as completed
+      if (draftId) {
+        await supabase
+          .from('tournament_drafts')
+          .update({ status: 'completed' })
+          .eq('id', draftId);
+          
+        // Log draft completion
+        logAction({
+          action: 'tournament_draft_completed',
+          details: {
+            draft_id: draftId,
+            tournament_id: tournament.id
+          }
+        });
+      }
+      
+      // Call success callback
       onSuccess(tournament.id);
-
     } catch (err: any) {
       console.error('Error creating tournament:', err);
-      setError(err.message || 'Failed to create tournament');
+      setError('Failed to create tournament: ' + err.message);
+      
+      // Log error
+      logAction({
+        action: 'tournament_creation_error',
+        details: {
+          error: err.message,
+          form_data: { ...formData, pairingSystem }
+        }
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleClose = () => {
-    setCurrentStep('basic');
-    setWizardStepIndex(0);
-    setFormData(DEFAULT_FORM_DATA);
-    setWizardResponses({});
-    setSelectedPairingFormat('swiss');
-    setError(null);
-    setDraftId(undefined);
-    onClose();
-  };
-
   if (!isOpen) return null;
-
-  const currentWizardStep = WIZARD_STEPS[wizardStepIndex];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-        onClick={handleClose}
+        onClick={onClose}
       />
       
       {/* Modal */}
-      <div className="relative w-full max-w-4xl max-h-[90vh] bg-gray-900/95 backdrop-blur-lg border-2 border-blue-500/50 rounded-2xl shadow-2xl overflow-hidden">
+      <div className="relative w-full max-w-3xl bg-gray-900/95 backdrop-blur-lg border-2 border-blue-500/50 rounded-2xl shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b-2 border-blue-500/30 bg-gradient-to-r from-blue-900/30 to-purple-900/30">
           <div className="flex items-center gap-4">
@@ -649,594 +318,548 @@ const TournamentSetupModal: React.FC<TournamentSetupModalProps> = ({
             </div>
             <div>
               <h2 className="text-2xl font-bold text-white font-orbitron">
-                {currentStep === 'basic' ? 'Create Tournament' :
-                 currentStep === 'pairing-method' ? 'Choose Pairing Method' :
-                 currentStep === 'wizard' ? 'Tournament Setup Wizard' :
-                 currentStep === 'manual-selection' ? 'Select Pairing Format' :
-                 'Review & Create'}
+                {draftLoaded ? 'Resume Tournament Setup' : 'Create New Tournament'}
               </h2>
               <p className="text-blue-300 font-jetbrains">
-                {currentStep === 'basic' ? 'Set up your tournament details' :
-                 currentStep === 'pairing-method' ? 'AI recommendation or manual selection' :
-                 currentStep === 'wizard' ? `Question ${wizardStepIndex + 1} of ${WIZARD_STEPS.length}` :
-                 currentStep === 'manual-selection' ? 'Choose your preferred pairing system' :
-                 'Review your settings and create tournament'}
+                {step === 'basic' && 'Basic Information'}
+                {step === 'pairing-method' && 'Pairing Method'}
+                {step === 'review' && 'Review & Create'}
               </p>
             </div>
           </div>
           
-          <div className="flex items-center gap-4">
-            {/* Auto-save status indicator */}
-            {draftId && (
-              <div className="text-sm font-jetbrains">
-                {autoSaveStatus === 'saving' && (
-                  <span className="text-yellow-400 flex items-center">
-                    <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse mr-2"></div>
-                    Saving...
-                  </span>
-                )}
-                {autoSaveStatus === 'saved' && (
-                  <span className="text-green-400 flex items-center">
-                    <div className="w-2 h-2 bg-green-400 rounded-full mr-2"></div>
-                    Draft saved
-                  </span>
-                )}
-                {autoSaveStatus === 'error' && (
-                  <span className="text-red-400 flex items-center">
-                    <div className="w-2 h-2 bg-red-400 rounded-full mr-2"></div>
-                    Save failed
-                  </span>
-                )}
-              </div>
-            )}
-            
-            <button
-              onClick={handleClose}
-              className="w-10 h-10 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-all duration-200"
-            >
-              <X size={24} />
-            </button>
-          </div>
+          <button
+            onClick={onClose}
+            className="w-10 h-10 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-all duration-200"
+          >
+            <X size={24} />
+          </button>
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
-          {/* Basic Information Step */}
-          {currentStep === 'basic' && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Tournament Name */}
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-300 mb-2 font-jetbrains">
-                    Tournament Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => handleInputChange('name', e.target.value)}
-                    className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 font-jetbrains"
-                    placeholder="Enter tournament name"
-                  />
+        <div className="p-6">
+          {/* Progress Steps */}
+          <div className="mb-8">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  step === 'basic' ? 'bg-blue-500 text-white' : 'bg-green-500 text-white'
+                }`}>
+                  {step === 'basic' ? '1' : <Check size={16} />}
                 </div>
+                <span className={`text-sm font-jetbrains ${
+                  step === 'basic' ? 'text-blue-400' : 'text-green-400'
+                }`}>
+                  Basic Info
+                </span>
+              </div>
+              
+              <div className="h-1 flex-1 mx-2 bg-gray-700">
+                <div className={`h-full bg-blue-500 transition-all duration-300 ${
+                  step === 'basic' ? 'w-0' : 'w-full'
+                }`} />
+              </div>
+              
+              {!formData.triumvirateMode && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                      step === 'pairing-method' 
+                        ? 'bg-blue-500 text-white' 
+                        : step === 'review' 
+                        ? 'bg-green-500 text-white' 
+                        : 'bg-gray-700 text-gray-400'
+                    }`}>
+                      {step === 'pairing-method' ? '2' : step === 'review' ? <Check size={16} /> : '2'}
+                    </div>
+                    <span className={`text-sm font-jetbrains ${
+                      step === 'pairing-method' 
+                        ? 'text-blue-400' 
+                        : step === 'review' 
+                        ? 'text-green-400' 
+                        : 'text-gray-400'
+                    }`}>
+                      Pairing Method
+                    </span>
+                  </div>
+                  
+                  <div className="h-1 flex-1 mx-2 bg-gray-700">
+                    <div className={`h-full bg-blue-500 transition-all duration-300 ${
+                      step === 'review' ? 'w-full' : 'w-0'
+                    }`} />
+                  </div>
+                </>
+              )}
+              
+              <div className="flex items-center gap-2">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  step === 'review' ? 'bg-blue-500 text-white' : 'bg-gray-700 text-gray-400'
+                }`}>
+                  {formData.triumvirateMode ? '2' : '3'}
+                </div>
+                <span className={`text-sm font-jetbrains ${
+                  step === 'review' ? 'text-blue-400' : 'text-gray-400'
+                }`}>
+                  Review
+                </span>
+              </div>
+            </div>
+          </div>
+          
+          {/* Error Display */}
+          {error && (
+            <div className="mb-6 bg-red-900/30 border border-red-500/50 rounded-lg p-4 text-red-300 font-jetbrains text-sm">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <p>{error}</p>
+                </div>
+              </div>
+            </div>
+          )}
 
-                {/* Date */}
+          {/* Basic Info Step */}
+          {step === 'basic' && (
+            <div className="space-y-6">
+              {/* Tournament Name */}
+              <div>
+                <label className="block text-gray-300 text-sm font-medium mb-2 font-jetbrains">
+                  Tournament Name *
+                </label>
+                <input
+                  type="text"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleInputChange}
+                  className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white font-jetbrains focus:border-blue-500 focus:outline-none transition-colors duration-300"
+                  placeholder="Enter tournament name"
+                />
+              </div>
+              
+              {/* Date & Venue */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2 font-jetbrains">
-                    <Calendar className="w-4 h-4 inline mr-2" />
-                    Date *
+                  <label className="block text-gray-300 text-sm font-medium mb-2 font-jetbrains">
+                    Date
                   </label>
                   <input
                     type="date"
+                    name="date"
                     value={formData.date}
-                    onChange={(e) => handleInputChange('date', e.target.value)}
-                    className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 font-jetbrains"
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white font-jetbrains focus:border-blue-500 focus:outline-none transition-colors duration-300"
                   />
                 </div>
-
-                {/* Venue */}
+                
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2 font-jetbrains">
-                    <MapPin className="w-4 h-4 inline mr-2" />
+                  <label className="block text-gray-300 text-sm font-medium mb-2 font-jetbrains">
                     Venue
                   </label>
                   <input
                     type="text"
+                    name="venue"
                     value={formData.venue}
-                    onChange={(e) => handleInputChange('venue', e.target.value)}
-                    className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 font-jetbrains"
-                    placeholder="Tournament venue"
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white font-jetbrains focus:border-blue-500 focus:outline-none transition-colors duration-300"
+                    placeholder="Enter venue name"
                   />
                 </div>
-
-                {/* Rounds */}
+              </div>
+              
+              {/* Rounds & Divisions */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2 font-jetbrains">
-                    <Trophy className="w-4 h-4 inline mr-2" />
+                  <label className="block text-gray-300 text-sm font-medium mb-2 font-jetbrains">
                     Number of Rounds *
                   </label>
                   <input
                     type="number"
-                    min="1"
-                    max="15"
+                    name="rounds"
                     value={formData.rounds}
-                    onChange={(e) => handleInputChange('rounds', parseInt(e.target.value) || 7)}
-                    className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 font-jetbrains"
+                    onChange={handleInputChange}
+                    min="1"
+                    max="100"
+                    disabled={formData.triumvirateMode}
+                    className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white font-jetbrains focus:border-blue-500 focus:outline-none transition-colors duration-300 disabled:bg-gray-700 disabled:text-gray-500"
                   />
+                  {formData.triumvirateMode && (
+                    <p className="mt-1 text-xs text-yellow-400 font-jetbrains">
+                      Fixed at 30 rounds for Triumvirate Mode
+                    </p>
+                  )}
                 </div>
-
-                {/* Divisions */}
+                
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2 font-jetbrains">
-                    <Users className="w-4 h-4 inline mr-2" />
+                  <label className="block text-gray-300 text-sm font-medium mb-2 font-jetbrains">
                     Number of Divisions *
                   </label>
                   <input
                     type="number"
+                    name="divisions"
+                    value={formData.divisions}
+                    onChange={handleInputChange}
                     min="1"
                     max="10"
-                    value={formData.divisions}
-                    onChange={(e) => handleInputChange('divisions', parseInt(e.target.value) || 1)}
-                    className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 font-jetbrains"
+                    className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white font-jetbrains focus:border-blue-500 focus:outline-none transition-colors duration-300"
                   />
                 </div>
               </div>
-
-              {/* Team Mode Toggle */}
-              <div className="bg-blue-900/20 border border-blue-500/30 rounded-xl p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <UserCheck className="w-6 h-6 text-blue-400" />
-                    <div>
-                      <h3 className="text-lg font-bold text-white font-orbitron">Team Mode</h3>
-                      <p className="text-blue-300 font-jetbrains text-sm">Enable team-based competition</p>
-                    </div>
-                  </div>
-                  
-                  <button
-                    onClick={() => handleInputChange('teamMode', !formData.teamMode)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
-                      formData.teamMode ? 'bg-blue-600' : 'bg-gray-600'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
-                        formData.teamMode ? 'translate-x-6' : 'translate-x-1'
-                      }`}
-                    />
-                  </button>
+              
+              {/* Tournament Mode */}
+              <div className="space-y-4">
+                <label className="block text-gray-300 text-sm font-medium mb-2 font-jetbrains">
+                  Tournament Mode
+                </label>
+                
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="teamMode"
+                    name="teamMode"
+                    checked={formData.teamMode}
+                    onChange={(e) => handleCheckboxChange('teamMode', e.target.checked)}
+                    className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500 focus:ring-offset-gray-800"
+                  />
+                  <label htmlFor="teamMode" className="text-white font-jetbrains">
+                    Team Tournament
+                  </label>
                 </div>
                 
-                {formData.teamMode && (
-                  <div className="text-blue-200 font-jetbrains text-sm">
-                    <p className="mb-2">✅ Team mode enabled - players will be grouped into teams</p>
-                    <p className="text-xs text-blue-300">Teams will compete against each other with automatic round-robin scheduling</p>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="triumvirateMode"
+                    name="triumvirateMode"
+                    checked={formData.triumvirateMode}
+                    onChange={(e) => handleCheckboxChange('triumvirateMode', e.target.checked)}
+                    disabled={!formData.teamMode}
+                    className="w-4 h-4 text-purple-600 bg-gray-700 border-gray-600 rounded focus:ring-purple-500 focus:ring-offset-gray-800 disabled:opacity-50"
+                  />
+                  <label 
+                    htmlFor="triumvirateMode" 
+                    className={`font-jetbrains ${formData.teamMode ? 'text-white' : 'text-gray-500'}`}
+                  >
+                    Triumvirate Mode (36 teams, 30 rounds, 2 phases)
+                  </label>
+                </div>
+                
+                {formData.triumvirateMode && (
+                  <div className="mt-4 bg-purple-900/20 border border-purple-500/30 rounded-lg p-4">
+                    <h4 className="text-purple-300 font-medium font-jetbrains mb-2 flex items-center gap-2">
+                      <Zap className="w-4 h-4" />
+                      Triumvirate Mode Enabled
+                    </h4>
+                    <p className="text-gray-300 text-sm font-jetbrains">
+                      This special format divides 36 teams into 6 groups for a 30-round tournament with two distinct phases.
+                    </p>
+                    <ul className="mt-2 space-y-1 text-xs text-gray-400 font-jetbrains">
+                      <li>• Phase 1 (Rounds 1-15): Cross-group play</li>
+                      <li>• Phase 2 (Rounds 16-30): Final placement groups</li>
+                    </ul>
                   </div>
                 )}
               </div>
+            </div>
+          )}
 
-              {/* Password Protection */}
-              <div className="bg-purple-900/20 border border-purple-500/30 rounded-xl p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <Lock className="w-6 h-6 text-purple-400" />
-                    <div>
-                      <h3 className="text-lg font-bold text-white font-orbitron">Password Protection</h3>
-                      <p className="text-purple-300 font-jetbrains text-sm">Require a password to view tournament</p>
-                    </div>
+          {/* Pairing Method Step */}
+          {step === 'pairing-method' && (
+            <div className="space-y-6">
+              <h3 className="text-lg font-bold text-white font-orbitron mb-4">
+                Select Pairing Method
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Swiss System */}
+                <div 
+                  className={`p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 ${
+                    pairingSystem === 'swiss' 
+                      ? 'bg-blue-900/20 border-blue-500' 
+                      : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'
+                  }`}
+                  onClick={() => setPairingSystem('swiss')}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-white font-bold font-jetbrains">Swiss System</h4>
+                    {pairingSystem === 'swiss' && (
+                      <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                        <Check size={14} className="text-white" />
+                      </div>
+                    )}
                   </div>
-                  
-                  <button
-                    onClick={() => handleInputChange('isPasswordProtected', !formData.isPasswordProtected)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
-                      formData.isPasswordProtected ? 'bg-purple-600' : 'bg-gray-600'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
-                        formData.isPasswordProtected ? 'translate-x-6' : 'translate-x-1'
-                      }`}
-                    />
-                  </button>
+                  <p className="text-sm text-gray-400">
+                    Standard pairing system that matches players with similar records
+                  </p>
                 </div>
                 
-                {formData.isPasswordProtected && (
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium text-gray-300 mb-2 font-jetbrains">
-                      Tournament Password *
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={formData.showPassword ? 'text' : 'password'}
-                        value={formData.password}
-                        onChange={(e) => handleInputChange('password', e.target.value)}
-                        className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 font-jetbrains pr-10"
-                        placeholder="Enter password"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleInputChange('showPassword', !formData.showPassword)}
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white transition-colors duration-200"
-                      >
-                        {formData.showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                      </button>
+                {/* King of the Hill */}
+                <div 
+                  className={`p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 ${
+                    pairingSystem === 'king-of-hill' 
+                      ? 'bg-blue-900/20 border-blue-500' 
+                      : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'
+                  }`}
+                  onClick={() => setPairingSystem('king-of-hill')}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-white font-bold font-jetbrains">King of the Hill</h4>
+                    {pairingSystem === 'king-of-hill' && (
+                      <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                        <Check size={14} className="text-white" />
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-400">
+                    Pairs top players against bottom players for maximum spread
+                  </p>
+                </div>
+                
+                {/* Fonte-Swiss */}
+                <div 
+                  className={`p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 ${
+                    pairingSystem === 'fonte-swiss' 
+                      ? 'bg-blue-900/20 border-blue-500' 
+                      : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'
+                  }`}
+                  onClick={() => setPairingSystem('fonte-swiss')}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-white font-bold font-jetbrains">Fonte-Swiss</h4>
+                    {pairingSystem === 'fonte-swiss' && (
+                      <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                        <Check size={14} className="text-white" />
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-400">
+                    Modified Swiss that pairs within score groups for better accuracy
+                  </p>
+                </div>
+                
+                {/* Round Robin */}
+                <div 
+                  className={`p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 ${
+                    pairingSystem === 'round-robin' 
+                      ? 'bg-blue-900/20 border-blue-500' 
+                      : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'
+                  }`}
+                  onClick={() => setPairingSystem('round-robin')}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-white font-bold font-jetbrains">Round Robin</h4>
+                    {pairingSystem === 'round-robin' && (
+                      <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                        <Check size={14} className="text-white" />
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-400">
+                    Everyone plays everyone once (best for small tournaments)
+                  </p>
+                </div>
+                
+                {/* Team Round Robin */}
+                {formData.teamMode && (
+                  <div 
+                    className={`p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 ${
+                      pairingSystem === 'team-round-robin' 
+                        ? 'bg-blue-900/20 border-blue-500' 
+                        : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'
+                    }`}
+                    onClick={() => setPairingSystem('team-round-robin')}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-white font-bold font-jetbrains">Team Round Robin</h4>
+                      {pairingSystem === 'team-round-robin' && (
+                        <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                          <Check size={14} className="text-white" />
+                        </div>
+                      )}
                     </div>
-                    <p className="text-xs text-purple-300 mt-2 font-jetbrains">
-                      This password will be required to view the tournament
+                    <p className="text-sm text-gray-400">
+                      Each team plays every other team once
                     </p>
                   </div>
                 )}
-              </div>
-
-              {/* Public Sharing */}
-              <div className="bg-green-900/20 border border-green-500/30 rounded-xl p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <Share2 className="w-6 h-6 text-green-400" />
-                    <div>
-                      <h3 className="text-lg font-bold text-white font-orbitron">Public Sharing</h3>
-                      <p className="text-green-300 font-jetbrains text-sm">Allow public access to tournament</p>
-                    </div>
-                  </div>
-                  
-                  <button
-                    onClick={() => handleInputChange('publicSharingEnabled', !formData.publicSharingEnabled)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
-                      formData.publicSharingEnabled ? 'bg-green-600' : 'bg-gray-600'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
-                        formData.publicSharingEnabled ? 'translate-x-6' : 'translate-x-1'
-                      }`}
-                    />
-                  </button>
-                </div>
                 
-                <p className="text-green-200 font-jetbrains text-sm">
-                  {formData.publicSharingEnabled 
-                    ? '✅ Tournament will be publicly viewable via shared link' 
-                    : '❌ Tournament will be private and cannot be shared'}
-                </p>
-              </div>
-
-              {/* Division Names */}
-              {formData.divisions > 1 && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-4 font-jetbrains">
-                    Division Names
-                  </label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {formData.divisionNames.slice(0, formData.divisions).map((name, index) => (
-                      <input
-                        key={index}
-                        type="text"
-                        value={name}
-                        onChange={(e) => handleDivisionNameChange(index, e.target.value)}
-                        className="px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 font-jetbrains"
-                        placeholder={`Division ${index + 1} name`}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Error Display */}
-              {error && (
-                <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-4 text-red-300 font-jetbrains text-sm">
-                  {error}
-                </div>
-              )}
-
-              {/* Next Button */}
-              <div className="flex justify-end">
-                <button
-                  onClick={handleBasicNext}
-                  className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-jetbrains font-medium transition-all duration-200"
+                {/* Manual Pairing */}
+                <div 
+                  className={`p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 ${
+                    pairingSystem === 'manual' 
+                      ? 'bg-blue-900/20 border-blue-500' 
+                      : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'
+                  }`}
+                  onClick={() => setPairingSystem('manual')}
                 >
-                  <ArrowRight size={16} />
-                  Continue
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Pairing Method Selection */}
-          {currentStep === 'pairing-method' && (
-            <div className="space-y-8">
-              <div className="text-center mb-8">
-                <h3 className="text-2xl font-bold text-white font-orbitron mb-2">
-                  Choose Your Pairing Method
-                </h3>
-                <p className="text-gray-400 font-jetbrains">
-                  How would you like to determine the best pairing system for your tournament?
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* AI Recommendation Option */}
-                <button
-                  onClick={() => handlePairingMethodSelection('wizard')}
-                  className="group p-8 bg-gradient-to-br from-purple-900/30 to-blue-900/30 border-2 border-purple-500/30 rounded-2xl hover:border-purple-400/50 hover:from-purple-900/40 hover:to-blue-900/40 transition-all duration-300 text-left"
-                >
-                  <div className="flex items-center gap-4 mb-6">
-                    <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-blue-500 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                      <Brain className="w-8 h-8 text-white" />
-                    </div>
-                    <div>
-                      <h4 className="text-2xl font-bold text-white font-orbitron mb-2 group-hover:text-purple-300 transition-colors duration-300">
-                        🤖 AI Recommendation
-                      </h4>
-                      <p className="text-purple-300 font-jetbrains">Intelligent pairing wizard</p>
-                    </div>
-                  </div>
-                  
-                  <p className="text-gray-300 font-jetbrains mb-4 leading-relaxed">
-                    Answer a few strategic questions and let our AI recommend the optimal pairing system based on your tournament goals, player count, and competitive level.
-                  </p>
-                  
-                  <div className="flex items-center gap-2 text-purple-400 font-jetbrains text-sm">
-                    <Zap className="w-4 h-4" />
-                    <span>Recommended for most tournaments</span>
-                  </div>
-                </button>
-
-                {/* Manual Selection Option */}
-                <button
-                  onClick={() => handlePairingMethodSelection('manual')}
-                  className="group p-8 bg-gradient-to-br from-cyan-900/30 to-green-900/30 border-2 border-cyan-500/30 rounded-2xl hover:border-cyan-400/50 hover:from-cyan-900/40 hover:to-green-900/40 transition-all duration-300 text-left"
-                >
-                  <div className="flex items-center gap-4 mb-6">
-                    <div className="w-16 h-16 bg-gradient-to-r from-cyan-500 to-green-500 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                      <Target className="w-8 h-8 text-white" />
-                    </div>
-                    <div>
-                      <h4 className="text-2xl font-bold text-white font-orbitron mb-2 group-hover:text-cyan-300 transition-colors duration-300">
-                        🎯 Manual Selection
-                      </h4>
-                      <p className="text-cyan-300 font-jetbrains">Direct format choice</p>
-                    </div>
-                  </div>
-                  
-                  <p className="text-gray-300 font-jetbrains mb-4 leading-relaxed">
-                    Browse and select from available pairing formats directly. Perfect if you already know which system you want to use for your tournament.
-                  </p>
-                  
-                  <div className="flex items-center gap-2 text-cyan-400 font-jetbrains text-sm">
-                    <Users className="w-4 h-4" />
-                    <span>For experienced tournament directors</span>
-                  </div>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Wizard Step */}
-          {currentStep === 'wizard' && currentWizardStep && (
-            <div className="space-y-6">
-              <div className="text-center mb-8">
-                <h3 className="text-2xl font-bold text-white font-orbitron mb-2">
-                  {currentWizardStep.question}
-                </h3>
-                <p className="text-gray-400 font-jetbrains">
-                  {currentWizardStep.description}
-                </p>
-              </div>
-
-              <div className="space-y-4">
-                {currentWizardStep.options.map((option) => (
-                  <button
-                    key={option.value}
-                    onClick={() => handleWizardResponse(option.value)}
-                    className="w-full p-6 bg-gray-800/50 border border-gray-600 rounded-lg hover:bg-gray-700/50 hover:border-blue-500/50 transition-all duration-200 text-left group"
-                  >
-                    <div className="flex items-start gap-4">
-                      <div className="w-6 h-6 border-2 border-gray-500 rounded-full group-hover:border-blue-400 transition-colors duration-200 flex-shrink-0 mt-1"></div>
-                      <div>
-                        <div className="text-white font-medium font-jetbrains mb-2">
-                          {option.label}
-                        </div>
-                        <div className="text-gray-400 font-jetbrains text-sm">
-                          {option.description}
-                        </div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-white font-bold font-jetbrains">Manual Pairing</h4>
+                    {pairingSystem === 'manual' && (
+                      <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                        <Check size={14} className="text-white" />
                       </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-
-              {/* Progress */}
-              <div className="mt-8">
-                <div className="flex items-center justify-between text-sm text-gray-400 mb-2">
-                  <span>Progress</span>
-                  <span>{wizardStepIndex + 1} of {WIZARD_STEPS.length}</span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-400">
+                    Create your own pairings manually for each round
+                  </p>
                 </div>
-                <div className="w-full bg-gray-800 rounded-full h-2">
-                  <div 
-                    className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-500"
-                    style={{ width: `${((wizardStepIndex + 1) / WIZARD_STEPS.length) * 100}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Manual Selection */}
-          {currentStep === 'manual-selection' && (
-            <div className="space-y-6">
-              <div className="text-center mb-8">
-                <h3 className="text-2xl font-bold text-white font-orbitron mb-2">
-                  Select Pairing Format
-                </h3>
-                <p className="text-gray-400 font-jetbrains">
-                  Choose the pairing system that best fits your tournament
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {PAIRING_FORMATS.map((format) => (
-                  <button
-                    key={format.id}
-                    onClick={() => handleManualSelection(format.id)}
-                    className="p-6 bg-gray-800/50 border border-gray-600 rounded-lg hover:bg-gray-700/50 hover:border-cyan-500/50 transition-all duration-200 text-left group"
-                  >
-                    <div className="mb-4">
-                      <h4 className="text-lg font-bold text-white font-orbitron mb-2 group-hover:text-cyan-300 transition-colors duration-200">
-                        {format.name}
-                      </h4>
-                      <p className="text-gray-400 font-jetbrains text-sm mb-3">
-                        {format.description}
-                      </p>
-                      <div className="text-cyan-400 font-jetbrains text-xs">
-                        Best for: {format.bestFor}
-                      </div>
-                    </div>
-                  </button>
-                ))}
               </div>
             </div>
           )}
 
           {/* Review Step */}
-          {currentStep === 'review' && (
+          {step === 'review' && (
             <div className="space-y-6">
-              <div className="text-center mb-8">
-                <h3 className="text-2xl font-bold text-white font-orbitron mb-2">
-                  Review Your Tournament
-                </h3>
-                <p className="text-gray-400 font-jetbrains">
-                  Confirm your settings and create the tournament
-                </p>
-              </div>
-
-              {/* Tournament Summary */}
-              <div className="bg-gray-800/50 border border-gray-600 rounded-lg p-6">
-                <h4 className="text-lg font-bold text-white font-orbitron mb-4">Tournament Details</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-400">Name:</span>
-                    <span className="text-white ml-2 font-jetbrains">{formData.name}</span>
+              <h3 className="text-lg font-bold text-white font-orbitron mb-4">
+                Review Tournament Details
+              </h3>
+              
+              <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-6">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
+                    <Trophy className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <span className="text-gray-400">Date:</span>
-                    <span className="text-white ml-2 font-jetbrains">{formData.date}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">Venue:</span>
-                    <span className="text-white ml-2 font-jetbrains">{formData.venue || 'Not specified'}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">Rounds:</span>
-                    <span className="text-white ml-2 font-jetbrains">{formData.rounds}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">Divisions:</span>
-                    <span className="text-white ml-2 font-jetbrains">{formData.divisions}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">Type:</span>
-                    <span className="text-white ml-2 font-jetbrains flex items-center gap-1">
-                      {formData.teamMode ? (
-                        <>
-                          <UserCheck className="w-4 h-4 text-blue-400" />
-                          Team Tournament
-                        </>
-                      ) : (
-                        'Individual Tournament'
+                    <h4 className="text-xl font-bold text-white font-orbitron">
+                      {formData.name}
+                    </h4>
+                    <div className="flex flex-wrap items-center gap-4 text-sm text-gray-400 mt-1">
+                      {formData.date && (
+                        <div className="flex items-center gap-1">
+                          <Calendar size={14} />
+                          <span className="font-jetbrains">
+                            {new Date(formData.date).toLocaleDateString()}
+                          </span>
+                        </div>
                       )}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">Password Protected:</span>
-                    <span className="text-white ml-2 font-jetbrains flex items-center gap-1">
-                      {formData.isPasswordProtected ? (
-                        <>
-                          <Lock className="w-4 h-4 text-purple-400" />
-                          Yes
-                        </>
-                      ) : (
-                        'No'
+                      
+                      {formData.venue && (
+                        <div className="flex items-center gap-1">
+                          <MapPin size={14} />
+                          <span className="font-jetbrains">{formData.venue}</span>
+                        </div>
                       )}
-                    </span>
+                    </div>
                   </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <span className="text-gray-400">Public Sharing:</span>
-                    <span className="text-white ml-2 font-jetbrains flex items-center gap-1">
-                      {formData.publicSharingEnabled ? (
+                    <h5 className="text-sm font-medium text-gray-400 mb-2 font-jetbrains">
+                      Tournament Structure
+                    </h5>
+                    <ul className="space-y-2 text-sm">
+                      <li className="flex justify-between">
+                        <span className="text-gray-400">Rounds:</span>
+                        <span className="text-white font-medium">{formData.rounds}</span>
+                      </li>
+                      <li className="flex justify-between">
+                        <span className="text-gray-400">Divisions:</span>
+                        <span className="text-white font-medium">{formData.divisions}</span>
+                      </li>
+                      <li className="flex justify-between">
+                        <span className="text-gray-400">Tournament Type:</span>
+                        <span className="text-white font-medium">
+                          {formData.triumvirateMode 
+                            ? 'Triumvirate Team Tournament' 
+                            : formData.teamMode 
+                            ? 'Team Tournament' 
+                            : 'Individual Tournament'}
+                        </span>
+                      </li>
+                    </ul>
+                  </div>
+                  
+                  <div>
+                    <h5 className="text-sm font-medium text-gray-400 mb-2 font-jetbrains">
+                      Pairing Settings
+                    </h5>
+                    <ul className="space-y-2 text-sm">
+                      <li className="flex justify-between">
+                        <span className="text-gray-400">Pairing System:</span>
+                        <span className="text-white font-medium">
+                          {formData.triumvirateMode 
+                            ? 'Triumvirate' 
+                            : pairingSystem.charAt(0).toUpperCase() + pairingSystem.slice(1).replace('-', ' ')}
+                        </span>
+                      </li>
+                      {formData.triumvirateMode && (
                         <>
-                          <Share2 className="w-4 h-4 text-green-400" />
-                          Enabled
+                          <li className="flex justify-between">
+                            <span className="text-gray-400">Phase 1:</span>
+                            <span className="text-white font-medium">15 rounds (cross-group)</span>
+                          </li>
+                          <li className="flex justify-between">
+                            <span className="text-gray-400">Phase 2:</span>
+                            <span className="text-white font-medium">15 rounds (placement)</span>
+                          </li>
                         </>
-                      ) : (
-                        'Disabled'
                       )}
-                    </span>
+                    </ul>
                   </div>
                 </div>
-              </div>
-
-              {/* Recommended Pairing System */}
-              <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-6">
-                <h4 className="text-lg font-bold text-blue-300 font-orbitron mb-4 flex items-center gap-2">
-                  <Target size={20} />
-                  {formData.teamMode ? 'Selected' : 'Recommended'} Pairing System
-                </h4>
-                <div className="text-white font-jetbrains mb-2 text-lg">
-                  {selectedPairingFormat.charAt(0).toUpperCase() + selectedPairingFormat.slice(1).replace('-', ' ')}
-                </div>
-                <div className="text-gray-300 font-jetbrains text-sm">
-                  {recommendationReasoning}
-                </div>
-              </div>
-
-              {/* URL Preview */}
-              <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-6">
-                <h4 className="text-lg font-bold text-green-300 font-orbitron mb-4 flex items-center gap-2">
-                  <Share2 size={20} />
-                  Tournament URL Preview
-                </h4>
-                <div className="text-white font-jetbrains mb-2 text-lg">
-                  https://direktorweb.com/tournaments/{generateTournamentSlug(formData.name)}
-                </div>
-                <div className="text-gray-300 font-jetbrains text-sm">
-                  This is how your tournament URL will appear when shared. The URL is based on your tournament name.
-                </div>
-              </div>
-
-              {/* Error Display */}
-              {error && (
-                <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-4 text-red-300 font-jetbrains text-sm">
-                  {error}
-                </div>
-              )}
-
-              {/* Create Button */}
-              <div className="flex justify-end gap-4">
-                <button
-                  onClick={() => setCurrentStep(formData.teamMode ? 'basic' : 'pairing-method')}
-                  className="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-jetbrains font-medium transition-all duration-200"
-                >
-                  Back
-                </button>
-                <button
-                  onClick={handleCreateTournament}
-                  disabled={isLoading}
-                  className="flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-jetbrains font-medium transition-all duration-200"
-                >
-                  {isLoading ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Creating Tournament...
-                    </>
-                  ) : (
-                    <>
-                      <Save size={16} />
-                      Create Tournament
-                    </>
-                  )}
-                </button>
+                
+                {/* Triumvirate Mode Notice */}
+                {formData.triumvirateMode && (
+                  <div className="mt-6 bg-purple-900/20 border border-purple-500/30 rounded-lg p-4">
+                    <h4 className="text-purple-300 font-medium font-jetbrains mb-2 flex items-center gap-2">
+                      <Zap className="w-4 h-4" />
+                      Triumvirate Mode Configuration
+                    </h4>
+                    <p className="text-gray-300 text-sm font-jetbrains">
+                      Your tournament will be set up with 6 groups of 6 teams each. You'll need to register exactly 36 teams.
+                    </p>
+                    <p className="text-gray-300 text-sm font-jetbrains mt-1">
+                      After Phase 1 (rounds 1-15), teams will be regrouped based on their standings for Phase 2 (rounds 16-30).
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}
+
+          {/* Navigation Buttons */}
+          <div className="flex justify-between mt-8">
+            {step !== 'basic' ? (
+              <button
+                onClick={handleBack}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white rounded-lg font-jetbrains transition-all duration-200"
+              >
+                <ArrowLeft size={16} />
+                Back
+              </button>
+            ) : (
+              <div></div> // Empty div to maintain layout
+            )}
+            
+            {step !== 'review' ? (
+              <button
+                onClick={handleNext}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-jetbrains transition-all duration-200"
+              >
+                Next
+                <ArrowRight size={16} />
+              </button>
+            ) : (
+              <button
+                onClick={handleCreateTournament}
+                disabled={isLoading}
+                className="flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-jetbrains font-medium transition-all duration-200"
+              >
+                {isLoading ? (
+                  <>
+                    <RefreshCw size={16} className="animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Trophy size={16} />
+                    Create Tournament
+                  </>
+                )}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

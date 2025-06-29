@@ -27,6 +27,10 @@ export interface Tournament {
   pairing_system?: PairingFormat;
   wizard_responses?: WizardResponses;
   tournament_config?: TournamentConfig;
+  // Triumvirate mode fields
+  triumvirate_mode?: boolean;
+  triumvirate_phase?: number;
+  triumvirate_config?: TriumvirateConfig;
 }
 
 export interface Division {
@@ -55,6 +59,12 @@ export interface Team {
   logo_url?: string;
   country?: string;
   created_at?: string;
+  // Triumvirate mode fields
+  triumvirate_group?: string;
+  triumvirate_position?: number;
+  phase1_wins?: number;
+  phase1_spread?: number;
+  phase1_individual_wins?: number;
 }
 
 export interface ParsedPlayer {
@@ -129,6 +139,12 @@ export interface TeamStanding {
   players: Player[];
   rank: number;
   team_info?: Team; // Added for logo and flag display
+  // Triumvirate mode fields
+  triumvirate_group?: string;
+  triumvirate_position?: number;
+  phase1_wins?: number;
+  phase1_spread?: number;
+  phase1_individual_wins?: number;
 }
 
 export interface TeamMatchResult {
@@ -149,7 +165,38 @@ export interface TeamMatchResult {
   }>;
 }
 
-export type PairingFormat = 'swiss' | 'fonte-swiss' | 'king-of-hill' | 'round-robin' | 'quartile' | 'manual' | 'team-round-robin';
+export type PairingFormat = 'swiss' | 'fonte-swiss' | 'king-of-hill' | 'round-robin' | 'quartile' | 'manual' | 'team-round-robin' | 'triumvirate';
+
+// Triumvirate Mode Types
+export interface TriumvirateGroup {
+  id?: string;
+  tournament_id: string;
+  group_name: string;
+  phase: number;
+  created_at?: string;
+}
+
+export interface TriumviratePhase {
+  id?: string;
+  tournament_id: string;
+  phase_number: number;
+  start_round: number;
+  end_round: number;
+  is_completed: boolean;
+  completed_at?: string;
+  created_at?: string;
+}
+
+export interface TriumvirateConfig {
+  total_teams: number;
+  total_rounds: number;
+  phase1_rounds: number;
+  phase2_rounds: number;
+  groups_per_phase: number;
+  teams_per_group: number;
+  current_phase: number;
+  phase1_completed: boolean;
+}
 
 // Pairing Strategy Intelligence Types
 export interface PairingGoal {

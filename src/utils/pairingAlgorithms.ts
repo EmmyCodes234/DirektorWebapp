@@ -1,4 +1,5 @@
 import { PlayerWithRank, PairingDisplay, PairingFormat } from '../types/database';
+import { generateTriumviratePairings } from './triumvirateAlgorithms';
 
 export function generatePairings(
   players: PlayerWithRank[],
@@ -6,7 +7,9 @@ export function generatePairings(
   avoidRematches: boolean,
   previousPairings: Array<{ player1_id: string; player2_id: string }> = [],
   currentRound: number = 1,
-  totalRounds: number = 7
+  totalRounds: number = 7,
+  teams?: any[],
+  triumvirateConfig?: any
 ): PairingDisplay[] {
   // Filter out players who are not active (paused or withdrawn)
   const activePlayers = players.filter(p => 
@@ -27,6 +30,17 @@ export function generatePairings(
   sortedPlayers.forEach((player, index) => {
     player.rank = index + 1;
   });
+
+  // Handle Triumvirate format separately
+  if (format === 'triumvirate' && teams && triumvirateConfig) {
+    return generateTriumviratePairings(
+      sortedPlayers,
+      teams,
+      currentRound,
+      triumvirateConfig,
+      previousPairings.map(p => ({ team1: p.player1_id, team2: p.player2_id }))
+    );
+  }
 
   switch (format) {
     case 'swiss':

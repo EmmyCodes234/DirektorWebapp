@@ -8,6 +8,12 @@ import TournamentChecklist from './UI/TournamentChecklist';
 import FloatingActionButton from './UI/FloatingActionButton';
 import Sidebar from './Navigation/Sidebar';
 import TeamStandings from './TeamStandings';
+import TriumviratePhaseIndicator from './TriumvirateMode/TriumviratePhaseIndicator';
+import TriumvirateGroupStandings from './TriumvirateMode/TriumvirateGroupStandings';
+import TriumvirateSetup from './TriumvirateMode/TriumvirateSetup';
+import TriumvirateTeamImport from './TriumvirateMode/TriumvirateTeamImport';
+import TriumviratePhaseTransition from './TriumvirateMode/TriumviratePhaseTransition';
+import { isReadyForPhase2 } from '../utils/triumvirateAlgorithms';
 
 // Lazy-loaded components
 const RoundManager = React.lazy(() => import('./RoundManager'));
@@ -30,9 +36,12 @@ interface Tournament {
   team_mode: boolean;
   slug: string;
   public_sharing_enabled: boolean;
+  triumvirate_mode?: boolean;
+  triumvirate_phase?: number;
+  triumvirate_config?: any;
 }
 
-type ActiveTab = 'players' | 'rounds' | 'scores' | 'standings' | 'admin' | 'statistics' | 'registration' | 'summary';
+type ActiveTab = 'players' | 'rounds' | 'scores' | 'standings' | 'admin' | 'statistics' | 'registration' | 'summary' | 'triumvirate';
 
 const TournamentControlCenter: React.FC = () => {
   const { tournamentId } = useParams<{ tournamentId: string }>();
@@ -51,6 +60,10 @@ const TournamentControlCenter: React.FC = () => {
   const [checklistSteps, setChecklistSteps] = useState<ChecklistStep[]>([]);
   const [isMobile, setIsMobile] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showPhaseTransition, setShowPhaseTransition] = useState(false);
+  const [teams, setTeams] = useState<any[]>([]);
+  const [results, setResults] = useState<any[]>([]);
+  const [pairings, setPairings] = useState<any[]>([]);
 
   useEffect(() => {
     initializeComponent();
@@ -134,6 +147,18 @@ const TournamentControlCenter: React.FC = () => {
 
       setTournament(data);
       
+      // If tournament is triumvirate mode, load teams, results, and pairings
+      if (data.triumvirate_mode) {
+        await loadTriumvirateData();
+        
+        // Check if ready for Phase 2
+        if (data.triumvirate_phase === 1 && 
+            data.triumvirate_config && 
+            isReadyForPhase2(data.current_round, data.triumvirate_config)) {
+          setShowPhaseTransition(true);
+        }
+      }
+      
       // Check if tournament is completed and load winner
       if (data.status === 'completed') {
         await loadTournamentWinner();
@@ -157,6 +182,40 @@ const TournamentControlCenter: React.FC = () => {
     } catch (err: any) {
       console.error('Error loading tournament:', err);
       setError(err.message || 'Failed to load tournament');
+    }
+  };
+
+  const loadTriumvirateData = async () => {
+    try {
+      // Load teams
+      const { data: teamsData, error: teamsError } = await supabase
+        .from('teams')
+        .select('*')
+        .eq('tournament_id', tournamentId)
+        .order('name');
+        
+      if (teamsError) throw teamsError;
+      setTeams(teamsData || []);
+      
+      // Load results
+      const { data: resultsData, error: resultsError } = await supabase
+        .from('results')
+        .select('*')
+        .eq('tournament_id', tournamentId);
+        
+      if (resultsError) throw resultsError;
+      setResults(resultsData || []);
+      
+      // Load pairings
+      const { data: pairingsData, error: pairingsError } = await supabase
+        .from('pairings')
+        .select('*')
+        .eq('tournament_id', tournamentId);
+        
+      if (pairingsError) throw pairingsError;
+      setPairings(pairingsData || []);
+    } catch (err) {
+      console.error('Error loading triumvirate data:', err);
     }
   };
 
@@ -282,7 +341,22 @@ const TournamentControlCenter: React.FC = () => {
         completed: hasRegisteredPlayers,
         current: activeTab === 'registration' || activeTab === 'players',
         disabled: false
-      },
+      }
+    ];
+    
+    // Add triumvirate setup step if needed
+    if (tournament.triumvirate_mode) {
+      steps.push({
+        id: 'triumvirate-setup',
+        label: 'Triumvirate Setup',
+        completed: tournament.triumvirate_phase === 2 || teams.length >= 36,
+        current: activeTab === 'triumvirate',
+        disabled: !hasRegisteredPlayers
+      });
+    }
+    
+    // Add remaining steps
+    steps.push(
       {
         id: 'pair-rounds',
         label: 'Pair Rounds',
@@ -304,7 +378,7 @@ const TournamentControlCenter: React.FC = () => {
         current: activeTab === 'standings',
         disabled: !hasRegisteredPlayers || tournament.current_round <= 1
       }
-    ];
+    );
     
     setChecklistSteps(steps);
   };
@@ -351,6 +425,9 @@ const TournamentControlCenter: React.FC = () => {
       case 'register-players':
         setActiveTab(tournament?.team_mode && !hasRegisteredPlayers ? 'registration' : 'players');
         break;
+      case 'triumvirate-setup':
+        setActiveTab('triumvirate');
+        break;
       case 'pair-rounds':
         setActiveTab('rounds');
         break;
@@ -383,6 +460,24 @@ const TournamentControlCenter: React.FC = () => {
 
   const handleCreateNew = () => {
     navigate('/new-tournament');
+  };
+  
+  const handleTriumvirateSetupComplete = () => {
+    loadTriumvirateData();
+  };
+  
+  const handleTriumvirateTeamImportComplete = () => {
+    loadTriumvirateData();
+    setHasRegisteredPlayers(true);
+  };
+  
+  const handleStartPhase2 = () => {
+    setShowPhaseTransition(true);
+  };
+  
+  const handlePhaseTransitionComplete = () => {
+    setShowPhaseTransition(false);
+    loadTournament();
   };
 
   // FAB actions based on current tab
@@ -528,7 +623,7 @@ const TournamentControlCenter: React.FC = () => {
                 <div>
                   <h1 className="text-2xl font-bold text-white font-orbitron">{tournament.name}</h1>
                   <p className="text-gray-400 font-jetbrains text-sm">
-                    Team Tournament • Registration Required
+                    {tournament.triumvirate_mode ? 'Triumvirate Tournament' : 'Team Tournament'} • Registration Required
                   </p>
                 </div>
               </div>
@@ -551,25 +646,34 @@ const TournamentControlCenter: React.FC = () => {
             <div className="flex items-center gap-3 mb-4">
               <AlertTriangle className="w-6 h-6 text-yellow-400" />
               <h2 className="text-xl font-bold text-yellow-300 font-orbitron">
-                Team Player Registration Required
+                {tournament.triumvirate_mode ? 'Triumvirate' : 'Team'} Player Registration Required
               </h2>
             </div>
             <p className="text-gray-300 font-jetbrains mb-4">
               Before you can access the tournament control center, you need to register players for each team.
-              This is a mandatory step for team tournaments.
+              {tournament.triumvirate_mode && ' Triumvirate mode requires exactly 36 teams with an equal number of players per team.'}
             </p>
             <p className="text-yellow-200 font-jetbrains text-sm">
               Please complete the registration process below to continue.
             </p>
           </div>
           
-          <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" /></div>}>
-            <PlayerRegistration 
-              tournamentId={tournamentId!} 
-              onBack={handlePlayerRegistrationBack}
-              onNext={handlePlayerRegistrationNext}
-            />
-          </Suspense>
+          {tournament.triumvirate_mode ? (
+            <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" /></div>}>
+              <TriumvirateTeamImport 
+                tournamentId={tournamentId!}
+                onImportComplete={handleTriumvirateTeamImportComplete}
+              />
+            </Suspense>
+          ) : (
+            <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" /></div>}>
+              <PlayerRegistration 
+                tournamentId={tournamentId!} 
+                onBack={handlePlayerRegistrationBack}
+                onNext={handlePlayerRegistrationNext}
+              />
+            </Suspense>
+          )}
         </div>
       </div>
     );
@@ -583,6 +687,11 @@ const TournamentControlCenter: React.FC = () => {
     { id: 'statistics' as ActiveTab, label: 'Statistics', icon: BarChart3 },
     { id: 'admin' as ActiveTab, label: 'Settings', icon: Settings },
   ];
+  
+  // Add Triumvirate tab if needed
+  if (tournament.triumvirate_mode) {
+    tabs.splice(1, 0, { id: 'triumvirate' as ActiveTab, label: 'Triumvirate', icon: Users });
+  }
 
   const renderTabContent = () => {
     const commonProps = {
@@ -628,6 +737,49 @@ const TournamentControlCenter: React.FC = () => {
             </div>
           </Suspense>
         );
+      case 'triumvirate':
+        return (
+          <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" /></div>}>
+            <div className="space-y-6">
+              {/* Phase Transition Modal */}
+              {showPhaseTransition && (
+                <TriumviratePhaseTransition
+                  tournamentId={tournamentId!}
+                  tournament={tournament}
+                  teams={teams}
+                  results={results}
+                  pairings={pairings}
+                  onTransitionComplete={handlePhaseTransitionComplete}
+                />
+              )}
+              
+              {/* Phase Indicator */}
+              {!showPhaseTransition && (
+                <TriumviratePhaseIndicator 
+                  tournament={tournament}
+                  onStartPhase2={handleStartPhase2}
+                />
+              )}
+              
+              {/* Group Standings */}
+              {!showPhaseTransition && teams.length > 0 && (
+                <TriumvirateGroupStandings
+                  tournamentId={tournamentId!}
+                  tournament={tournament}
+                />
+              )}
+              
+              {/* Triumvirate Setup */}
+              {!showPhaseTransition && teams.length === 0 && (
+                <TriumvirateSetup
+                  tournamentId={tournamentId!}
+                  tournament={tournament}
+                  onSetupComplete={handleTriumvirateSetupComplete}
+                />
+              )}
+            </div>
+          </Suspense>
+        );
       case 'rounds':
         return (
           <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" /></div>}>
@@ -637,6 +789,8 @@ const TournamentControlCenter: React.FC = () => {
               maxRounds={tournament.rounds}
               onBack={() => setActiveTab('players')}
               onNext={() => setActiveTab('scores')}
+              teams={teams}
+              triumvirateConfig={tournament.triumvirate_config}
             />
           </Suspense>
         );
@@ -721,6 +875,8 @@ const TournamentControlCenter: React.FC = () => {
                   <h1 className="text-2xl font-bold text-white font-orbitron">{tournament.name}</h1>
                   <p className="text-gray-400 font-jetbrains text-sm">
                     Round {tournament.current_round} of {tournament.rounds} • {tournament.status}
+                    {tournament.triumvirate_mode && tournament.triumvirate_phase && 
+                     ` • Phase ${tournament.triumvirate_phase}`}
                   </p>
                 </div>
               </div>
