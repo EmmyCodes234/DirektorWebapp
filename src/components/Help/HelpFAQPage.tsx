@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Search, ChevronDown, ChevronUp, ThumbsUp, ThumbsDown, Phone, Mail, ExternalLink, HelpCircle, User, Shield, Trophy, Settings, AlertTriangle } from 'lucide-react';
+import { Search, ChevronDown, ChevronUp, ThumbsUp, ThumbsDown, Phone, Mail, ExternalLink, HelpCircle, User, Shield, Trophy, Settings, AlertTriangle, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ParticleBackground from '../ParticleBackground';
 
