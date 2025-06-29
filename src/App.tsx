@@ -20,6 +20,7 @@ import { supabase } from './lib/supabase';
 import { useTournamentProgress } from './hooks/useTournamentProgress';
 import { useAuditLog } from './hooks/useAuditLog';
 import type { User } from '@supabase/supabase-js';
+import { HelpFAQPage } from './components/Help';
 
 // Lazy-loaded components
 const ProjectionMode = React.lazy(() => import('./components/ProjectionMode'));
@@ -112,6 +113,11 @@ function ProjectionModeRoute() {
       <ProjectionMode />
     </Suspense>
   );
+}
+
+// Help Route Component
+function HelpRoute() {
+  return <HelpFAQPage />;
 }
 
 // Auth Route Component
@@ -241,6 +247,7 @@ function App() {
         <Route path="/new-tournament" element={<DashboardRoute />} />
         <Route path="/tournaments" element={<DashboardRoute />} />
         <Route path="/history" element={<DashboardRoute />} />
+        <Route path="/help" element={<HelpRoute />} />
         <Route path="/tournament/:tournamentId/dashboard" element={<TournamentControlCenterRoute />} />
         <Route path="/t/:tournamentId" element={<PublicTournamentRoute />} />
         <Route path="/tournaments/:slug" element={<PublicTournamentRoute />} />
