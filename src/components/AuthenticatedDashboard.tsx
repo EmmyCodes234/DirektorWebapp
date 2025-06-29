@@ -62,9 +62,53 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
   }, [user.id]);
   
   const checkForDrafts = async () => {
-    const existingDrafts = await checkForExistingDrafts();
-    if (existingDrafts.length > 0) {
-      setShowDraftRecovery(true);
+    try {
+      const existingDrafts = await checkForExistingDrafts();
+      if (existingDrafts.length > 0) {
+        setShowDraftRecovery(true);
+      }
+    } catch (err) {
+      console.warn('Failed to check for drafts:', err);
+      // Don't show error for drafts check failure
+    }
+  };
+
+  const testSupabaseConnection = async (): Promise<boolean> => {
+    try {
+      // First check if environment variables are set
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      if (!supabaseUrl || !supabaseKey) {
+        throw new Error('Supabase configuration missing. Please check your environment variables.');
+      }
+
+      // Test basic connectivity with a simple query
+      const { data, error } = await supabase
+        .from('tournaments')
+        .select('id')
+        .limit(1);
+
+      if (error) {
+        throw error;
+      }
+
+      return true;
+    } catch (err: any) {
+      console.error('Supabase connection test failed:', err);
+      
+      // Provide specific error messages based on error type
+      if (err.message?.includes('Failed to fetch') || err.name === 'TypeError') {
+        throw new Error('Unable to connect to the database. Please check your internet connection and try again.');
+      } else if (err.message?.includes('Invalid API key')) {
+        throw new Error('Database authentication failed. Please check your configuration.');
+      } else if (err.message?.includes('CORS')) {
+        throw new Error('Cross-origin request blocked. Please check your browser settings or try a different browser.');
+      } else if (err.message?.includes('configuration missing')) {
+        throw new Error(err.message);
+      } else {
+        throw new Error(`Database connection failed: ${err.message || 'Unknown error'}`);
+      }
     }
   };
 
@@ -72,18 +116,10 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
     try {
       setConnectionError(null);
       
-      // Test Supabase connection first
-      const { data: testData, error: testError } = await supabase
-        .from('tournaments')
-        .select('id')
-        .limit(1);
+      // Test connection first
+      await testSupabaseConnection();
 
-      if (testError) {
-        console.error('Supabase connection test failed:', testError);
-        setConnectionError(`Database connection failed: ${testError.message}`);
-        return;
-      }
-
+      // If connection is successful, check for tournaments
       const { data, error } = await supabase
         .from('tournaments')
         .select('id')
@@ -91,23 +127,13 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
         .limit(1);
 
       if (error) {
-        console.error('Error checking existing tournaments:', error);
-        setConnectionError(`Failed to check tournaments: ${error.message}`);
-        return;
+        throw error;
       }
       
       setHasExistingTournaments((data || []).length > 0);
     } catch (err: any) {
       console.error('Error checking existing tournaments:', err);
-      
-      // Provide more specific error messages
-      if (err.message?.includes('Failed to fetch')) {
-        setConnectionError('Unable to connect to the database. Please check your internet connection and try again.');
-      } else if (err.message?.includes('CORS')) {
-        setConnectionError('Database configuration error. Please contact support.');
-      } else {
-        setConnectionError(`Connection error: ${err.message || 'Unknown error occurred'}`);
-      }
+      setConnectionError(err.message);
     }
   };
 
@@ -115,7 +141,9 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
     try {
       setIsLoading(true);
       setError(null);
-      setConnectionError(null);
+
+      // Test connection first
+      await testSupabaseConnection();
 
       // First, try to get existing profile
       const { data: profileData, error: profileError } = await supabase
@@ -162,15 +190,7 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
       }
     } catch (err: any) {
       console.error('Error loading user profile:', err);
-      
-      // Provide more specific error messages
-      if (err.message?.includes('Failed to fetch')) {
-        setError('Unable to connect to the database. Please check your internet connection and try again.');
-      } else if (err.message?.includes('CORS')) {
-        setError('Database configuration error. Please contact support.');
-      } else {
-        setError(`Failed to load user profile: ${err.message || 'Unknown error occurred'}`);
-      }
+      setError(err.message);
     } finally {
       setIsLoading(false);
     }
@@ -290,17 +310,28 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
         {/* Connection Error Message */}
         {connectionError && (
           <div className="max-w-4xl mx-auto w-full mb-8">
-            <div className="bg-yellow-900/30 border border-yellow-500/50 rounded-lg p-4 text-yellow-300 font-jetbrains text-sm">
+            <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-4 text-red-300 font-jetbrains text-sm">
               <div className="flex items-center gap-2 mb-2">
-                <span className="font-semibold">Connection Issue</span>
+                <span className="font-semibold">Connection Error</span>
               </div>
-              <p>{connectionError}</p>
-              <button
-                onClick={handleRetryConnection}
-                className="mt-2 px-3 py-1 bg-yellow-600/20 border border-yellow-500/50 rounded text-yellow-200 hover:bg-yellow-600/30 transition-colors duration-200"
-              >
-                Retry Connection
-              </button>
+              <p className="mb-3">{connectionError}</p>
+              <div className="space-y-2">
+                <button
+                  onClick={handleRetryConnection}
+                  className="px-3 py-1 bg-red-600/20 border border-red-500/50 rounded text-red-200 hover:bg-red-600/30 transition-colors duration-200 mr-2"
+                >
+                  Retry Connection
+                </button>
+                <div className="text-xs text-red-400 mt-2">
+                  <p>Troubleshooting tips:</p>
+                  <ul className="list-disc list-inside mt-1 space-y-1">
+                    <li>Check your internet connection</li>
+                    <li>Try refreshing the page</li>
+                    <li>Disable browser extensions that might block requests</li>
+                    <li>Try using a different browser or incognito mode</li>
+                  </ul>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -308,13 +339,16 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
         {/* Error Message */}
         {error && (
           <div className="max-w-4xl mx-auto w-full mb-8">
-            <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-4 text-red-300 font-jetbrains text-sm">
-              {error}
+            <div className="bg-yellow-900/30 border border-yellow-500/50 rounded-lg p-4 text-yellow-300 font-jetbrains text-sm">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="font-semibold">Profile Error</span>
+              </div>
+              <p>{error}</p>
               <button
                 onClick={handleRetryConnection}
-                className="mt-2 px-3 py-1 bg-red-600/20 border border-red-500/50 rounded text-red-200 hover:bg-red-600/30 transition-colors duration-200 block"
+                className="mt-2 px-3 py-1 bg-yellow-600/20 border border-yellow-500/50 rounded text-yellow-200 hover:bg-yellow-600/30 transition-colors duration-200"
               >
-                Retry Connection
+                Retry
               </button>
             </div>
           </div>
