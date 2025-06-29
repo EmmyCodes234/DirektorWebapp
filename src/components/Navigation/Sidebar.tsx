@@ -93,15 +93,15 @@ const Sidebar: React.FC<SidebarProps> = ({ onSignOut }) => {
   };
 
   const handleCreateNew = () => {
-    handleNavigation('/new-tournament');
+    navigate('/new-tournament');
   };
 
   const handleProfileSettings = () => {
-    handleNavigation('/profile');
+    navigate('/profile');
   };
 
   const handleHelp = () => {
-    handleNavigation('/help');
+    navigate('/help');
   };
 
   const isActive = (path: string) => {
