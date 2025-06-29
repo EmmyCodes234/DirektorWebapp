@@ -22,6 +22,20 @@ const COUNTRY_FLAGS: Record<string, string> = {
   'IL': '🇮🇱', 'TR': '🇹🇷', 'EG': '🇪🇬', 'MA': '🇲🇦', 'TN': '🇹🇳'
 };
 
+// Map of country codes to full country names
+const COUNTRY_NAMES: Record<string, string> = {
+  'US': 'United States', 'CA': 'Canada', 'GB': 'United Kingdom', 'AU': 'Australia', 'NZ': 'New Zealand',
+  'NG': 'Nigeria', 'GH': 'Ghana', 'KE': 'Kenya', 'ZA': 'South Africa', 'UG': 'Uganda',
+  'IN': 'India', 'PK': 'Pakistan', 'BD': 'Bangladesh', 'LK': 'Sri Lanka', 'MY': 'Malaysia',
+  'SG': 'Singapore', 'TH': 'Thailand', 'PH': 'Philippines', 'ID': 'Indonesia', 'VN': 'Vietnam',
+  'FR': 'France', 'DE': 'Germany', 'IT': 'Italy', 'ES': 'Spain', 'NL': 'Netherlands',
+  'BE': 'Belgium', 'CH': 'Switzerland', 'AT': 'Austria', 'SE': 'Sweden', 'NO': 'Norway',
+  'DK': 'Denmark', 'FI': 'Finland', 'IE': 'Ireland', 'PT': 'Portugal', 'GR': 'Greece',
+  'BR': 'Brazil', 'AR': 'Argentina', 'MX': 'Mexico', 'CL': 'Chile', 'CO': 'Colombia',
+  'JP': 'Japan', 'KR': 'South Korea', 'CN': 'China', 'TW': 'Taiwan', 'HK': 'Hong Kong',
+  'IL': 'Israel', 'TR': 'Turkey', 'EG': 'Egypt', 'MA': 'Morocco', 'TN': 'Tunisia'
+};
+
 const TeamLogo: React.FC<TeamLogoProps> = ({ 
   team, 
   teamName, 
@@ -72,9 +86,12 @@ const TeamLogo: React.FC<TeamLogoProps> = ({
 
   if (showFlag && team?.country && COUNTRY_FLAGS[team.country]) {
     return (
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-2">
         {logoElement}
-        <span className="text-sm">{COUNTRY_FLAGS[team.country]}</span>
+        <div className="flex items-center gap-1">
+          <span className="text-sm">{COUNTRY_FLAGS[team.country]}</span>
+          <span className="text-sm text-gray-300">{COUNTRY_NAMES[team.country]}</span>
+        </div>
       </div>
     );
   }
