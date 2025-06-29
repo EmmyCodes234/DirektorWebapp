@@ -1,17 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
-  Home, 
   Trophy, 
   Plus, 
-  Settings, 
   User, 
   HelpCircle, 
   ChevronLeft, 
   ChevronRight,
   LogOut,
   Users,
-  BarChart3
+  BarChart3,
+  Settings
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { get, set } from 'idb-keyval';
@@ -98,12 +97,9 @@ const Sidebar: React.FC<SidebarProps> = ({ onSignOut }) => {
   };
 
   const navItems = [
-    { path: '/dashboard', label: 'Dashboard', icon: Home },
-    { path: '/tournaments', label: 'My Tournaments', icon: Trophy },
     { path: '/new-tournament', label: 'Create New', icon: Plus },
     { path: '/leaderboard/players', label: 'Player Rankings', icon: Users },
-    { path: '/leaderboard/directors', label: 'Director Rankings', icon: BarChart3 },
-    { path: '/profile', label: 'Profile', icon: User },
+    { path: '/profile', label: 'Profile Settings', icon: Settings },
     { path: '/help', label: 'Help', icon: HelpCircle },
   ];
 
