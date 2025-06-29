@@ -77,14 +77,6 @@ const HomePage: React.FC = () => {
   const handleViewAllDirectors = () => {
     navigate('/leaderboard/directors');
   };
-  
-  const handleNavigateToDashboard = () => {
-    if (user) {
-      navigate('/dashboard');
-    } else {
-      navigate('/auth/signin');
-    }
-  };
 
   if (loading) {
     return (
@@ -117,7 +109,7 @@ const HomePage: React.FC = () => {
                 Welcome, {user.email}
               </span>
               <button
-                onClick={handleNavigateToDashboard}
+                onClick={() => navigate('/dashboard')}
                 className="px-4 py-2 bg-blue-600/20 border border-blue-500/50 text-blue-400 hover:bg-blue-600/30 hover:text-white rounded-lg font-jetbrains text-sm transition-all duration-200"
               >
                 My Dashboard
