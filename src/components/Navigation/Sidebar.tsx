@@ -10,7 +10,8 @@ import {
   LogOut,
   Users,
   BarChart3,
-  Settings
+  Settings,
+  Home
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { get, set } from 'idb-keyval';
@@ -93,15 +94,54 @@ const Sidebar: React.FC<SidebarProps> = ({ onSignOut }) => {
   };
 
   const handleCreateNew = () => {
+    setIsLoading(prev => ({ ...prev, '/new-tournament': true }));
+    
+    // Close mobile sidebar if open
+    if (isMobile && isOpen) {
+      setIsOpen(false);
+    }
+    
+    // Navigate to new tournament page
     navigate('/new-tournament');
+    
+    // Reset loading state after navigation
+    setTimeout(() => {
+      setIsLoading(prev => ({ ...prev, '/new-tournament': false }));
+    }, 300);
   };
 
   const handleProfileSettings = () => {
+    setIsLoading(prev => ({ ...prev, '/profile': true }));
+    
+    // Close mobile sidebar if open
+    if (isMobile && isOpen) {
+      setIsOpen(false);
+    }
+    
+    // Navigate to profile page
     navigate('/profile');
+    
+    // Reset loading state after navigation
+    setTimeout(() => {
+      setIsLoading(prev => ({ ...prev, '/profile': false }));
+    }, 300);
   };
 
   const handleHelp = () => {
+    setIsLoading(prev => ({ ...prev, '/help': true }));
+    
+    // Close mobile sidebar if open
+    if (isMobile && isOpen) {
+      setIsOpen(false);
+    }
+    
+    // Navigate to help page
     navigate('/help');
+    
+    // Reset loading state after navigation
+    setTimeout(() => {
+      setIsLoading(prev => ({ ...prev, '/help': false }));
+    }, 300);
   };
 
   const isActive = (path: string) => {
@@ -109,6 +149,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onSignOut }) => {
   };
 
   const navItems = [
+    { path: '/dashboard', label: 'Dashboard', icon: Home },
     { path: '/new-tournament', label: 'Create New', icon: Plus, onClick: handleCreateNew },
     { path: '/leaderboard/players', label: 'Player Rankings', icon: Users },
     { path: '/profile', label: 'Profile Settings', icon: Settings, onClick: handleProfileSettings },
@@ -264,7 +305,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onSignOut }) => {
         <button
           onClick={handleSignOut}
           disabled={isLoading.signOut}
-          className={`w-full mt-4 flex items-center gap-3 px-4 py-3 bg-red-600/20 text-red-400 hover:bg-red-600/30 hover:text-white rounded-lg border border-red-500/50 transition-all duration-300 active:scale-98 ${
+          className={`w-full mt-4 flex items-center gap-3 px-4 py-3 bg-red-600/20 border border-red-500/50 rounded-lg flex items-center justify-center text-red-400 hover:bg-red-600/30 hover:text-white hover:border-red-400 transition-all duration-200 group/gear ${
             collapsed ? 'justify-center' : ''
           }`}
           title={collapsed ? 'Sign Out' : undefined}
