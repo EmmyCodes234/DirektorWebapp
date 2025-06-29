@@ -9,6 +9,8 @@ import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 import { useOnboarding } from '../hooks/useOnboarding';
 import { useTournamentDraftSystem } from '../hooks/useTournamentDraftSystem';
+import UserProfileCard from './UserProfileCard';
+import ProfileEditor from './ProfileEditor';
 
 // Lazy-loaded components
 const TournamentResume = React.lazy(() => import('./TournamentResume'));
@@ -17,7 +19,10 @@ interface UserProfile {
   id: string;
   username: string;
   nickname?: string;
+  full_name?: string;
   avatar_url?: string;
+  country?: string;
+  bio?: string;
   created_at: string;
   updated_at: string;
 }
@@ -36,6 +41,7 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
   const [hasExistingTournaments, setHasExistingTournaments] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   
   const { hasCompletedOnboarding, resetOnboarding } = useOnboarding();
   const { 
@@ -132,6 +138,9 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
           id: user.id,
           username: user.email || '',
           nickname: '',
+          full_name: '',
+          country: '',
+          bio: '',
           avatar_url: null
         };
 
@@ -228,6 +237,10 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
     ]);
   };
 
+  const handleEditProfile = () => {
+    setShowProfileModal(true);
+  };
+
   // FAB actions
   const fabActions = [
     {
@@ -260,7 +273,7 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
     return (
       <DashboardLayout 
         title="Welcome Back" 
-        subtitle={profile?.username || user.email}
+        subtitle={profile?.full_name || profile?.username || user.email}
         fabActions={fabActions}
       >
         {/* Draft Recovery Dialog */}
@@ -314,7 +327,7 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
         />
 
         {/* Dashboard Cards */}
-        <div className="fade-up fade-up-delay-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="fade-up fade-up-delay-4 grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Create Tournament Card */}
           <div 
             className="bg-gradient-to-br from-blue-900/30 to-purple-900/30 border border-blue-500/30 rounded-xl p-6 hover:border-blue-500/50 transition-all duration-300 cursor-pointer"
@@ -335,44 +348,12 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
             </div>
           </div>
           
-          {/* My Tournaments Card */}
-          <div 
-            className="bg-gradient-to-br from-green-900/30 to-cyan-900/30 border border-green-500/30 rounded-xl p-6 hover:border-green-500/50 transition-all duration-300 cursor-pointer"
-            onClick={handleViewTournaments}
-            data-onboarding="my-tournaments"
-          >
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-cyan-500 rounded-lg flex items-center justify-center">
-                <Trophy className="w-6 h-6 text-white" />
-              </div>
-              <h3 className="text-xl font-bold text-white font-orbitron">My Tournaments</h3>
-            </div>
-            <p className="text-gray-300 font-jetbrains mb-4">
-              Access and manage your existing tournaments, view results, and continue where you left off.
-            </p>
-            <div className="text-green-400 font-jetbrains text-sm">
-              {hasExistingTournaments ? 'Resume your tournaments →' : 'Create your first tournament →'}
-            </div>
-          </div>
-          
-          {/* Player Leaderboard Card */}
-          <div 
-            className="bg-gradient-to-br from-yellow-900/30 to-orange-900/30 border border-yellow-500/30 rounded-xl p-6 hover:border-yellow-500/50 transition-all duration-300 cursor-pointer"
-            onClick={() => navigate('/leaderboard/players')}
-          >
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-12 h-12 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-lg flex items-center justify-center">
-                <Users className="w-6 h-6 text-white" />
-              </div>
-              <h3 className="text-xl font-bold text-white font-orbitron">Player Leaderboard</h3>
-            </div>
-            <p className="text-gray-300 font-jetbrains mb-4">
-              View top players across all tournaments, ranked by performance, wins, and badges earned.
-            </p>
-            <div className="text-yellow-400 font-jetbrains text-sm">
-              Explore player rankings →
-            </div>
-          </div>
+          {/* User Profile Card */}
+          <UserProfileCard 
+            profile={profile}
+            userEmail={user.email || ''}
+            onEditProfile={handleEditProfile}
+          />
         </div>
 
         {/* Tournament Setup Modal */}
@@ -381,6 +362,15 @@ const AuthenticatedDashboard: React.FC<AuthenticatedDashboardProps> = ({ user })
           onClose={() => setShowTournamentModal(false)}
           onSuccess={handleTournamentCreated}
           draftId={selectedDraftId || undefined}
+        />
+        
+        {/* Profile Editor Modal */}
+        <ProfileEditor
+          isOpen={showProfileModal}
+          onClose={() => setShowProfileModal(false)}
+          userId={user.id}
+          userEmail={user.email || ''}
+          onProfileUpdated={loadUserProfile}
         />
         
         {/* Reset Onboarding Button (for testing) */}

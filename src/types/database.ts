@@ -278,6 +278,18 @@ export interface PlayerProfile {
   updated_at?: string;
 }
 
+export interface UserProfile {
+  id: string;
+  username: string;
+  nickname?: string;
+  full_name?: string;
+  avatar_url?: string;
+  country?: string;
+  bio?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface PlayerWithStats extends Player {
   badges?: Badge[];
   profile?: PlayerProfile;
