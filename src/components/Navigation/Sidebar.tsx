@@ -92,15 +92,27 @@ const Sidebar: React.FC<SidebarProps> = ({ onSignOut }) => {
     }, 300);
   };
 
+  const handleCreateNew = () => {
+    handleNavigation('/new-tournament');
+  };
+
+  const handleProfileSettings = () => {
+    handleNavigation('/profile');
+  };
+
+  const handleHelp = () => {
+    handleNavigation('/help');
+  };
+
   const isActive = (path: string) => {
     return location.pathname === path || location.pathname.startsWith(`${path}/`);
   };
 
   const navItems = [
-    { path: '/new-tournament', label: 'Create New', icon: Plus },
+    { path: '/new-tournament', label: 'Create New', icon: Plus, onClick: handleCreateNew },
     { path: '/leaderboard/players', label: 'Player Rankings', icon: Users },
-    { path: '/profile', label: 'Profile Settings', icon: Settings },
-    { path: '/help', label: 'Help', icon: HelpCircle },
+    { path: '/profile', label: 'Profile Settings', icon: Settings, onClick: handleProfileSettings },
+    { path: '/help', label: 'Help', icon: HelpCircle, onClick: handleHelp },
   ];
 
   // Mobile sidebar
@@ -144,7 +156,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onSignOut }) => {
                 return (
                   <button
                     key={item.path}
-                    onClick={() => handleNavigation(item.path)}
+                    onClick={() => item.onClick ? item.onClick() : handleNavigation(item.path)}
                     disabled={isLoading[item.path]}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 ${
                       active
@@ -215,7 +227,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onSignOut }) => {
           return (
             <button
               key={item.path}
-              onClick={() => handleNavigation(item.path)}
+              onClick={() => item.onClick ? item.onClick() : handleNavigation(item.path)}
               disabled={isLoading[item.path]}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 ${
                 active
