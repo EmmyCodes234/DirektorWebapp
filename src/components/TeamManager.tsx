@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Upload, Flag, Users, Save, X, Edit, Trash2, Plus } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Team } from '../types/database';
+import ReactCountryFlag from 'react-country-flag';
 
 interface TeamManagerProps {
   tournamentId: string;
@@ -14,17 +15,17 @@ interface TeamFormData {
   logoFile?: File;
 }
 
-const COUNTRY_FLAGS: Record<string, string> = {
-  'US': '🇺🇸', 'CA': '🇨🇦', 'GB': '🇬🇧', 'AU': '🇦🇺', 'NZ': '🇳🇿',
-  'NG': '🇳🇬', 'GH': '🇬🇭', 'KE': '🇰🇪', 'ZA': '🇿🇦', 'UG': '🇺🇬',
-  'IN': '🇮🇳', 'PK': '🇵🇰', 'BD': '🇧🇩', 'LK': '🇱🇰', 'MY': '🇲🇾',
-  'SG': '🇸🇬', 'TH': '🇹🇭', 'PH': '🇵🇭', 'ID': '🇮🇩', 'VN': '🇻🇳',
-  'FR': '🇫🇷', 'DE': '🇩🇪', 'IT': '🇮🇹', 'ES': '🇪🇸', 'NL': '🇳🇱',
-  'BE': '🇧🇪', 'CH': '🇨🇭', 'AT': '🇦🇹', 'SE': '🇸🇪', 'NO': '🇳🇴',
-  'DK': '🇩🇰', 'FI': '🇫🇮', 'IE': '🇮🇪', 'PT': '🇵🇹', 'GR': '🇬🇷',
-  'BR': '🇧🇷', 'AR': '🇦🇷', 'MX': '🇲🇽', 'CL': '🇨🇱', 'CO': '🇨🇴',
-  'JP': '🇯🇵', 'KR': '🇰🇷', 'CN': '🇨🇳', 'TW': '🇹🇼', 'HK': '🇭🇰',
-  'IL': '🇮🇱', 'TR': '🇹🇷', 'EG': '🇪🇬', 'MA': '🇲🇦', 'TN': '🇹🇳'
+const COUNTRY_CODES: Record<string, string> = {
+  'US': 'United States', 'CA': 'Canada', 'GB': 'United Kingdom', 'AU': 'Australia', 'NZ': 'New Zealand',
+  'NG': 'Nigeria', 'GH': 'Ghana', 'KE': 'Kenya', 'ZA': 'South Africa', 'UG': 'Uganda',
+  'IN': 'India', 'PK': 'Pakistan', 'BD': 'Bangladesh', 'LK': 'Sri Lanka', 'MY': 'Malaysia',
+  'SG': 'Singapore', 'TH': 'Thailand', 'PH': 'Philippines', 'ID': 'Indonesia', 'VN': 'Vietnam',
+  'FR': 'France', 'DE': 'Germany', 'IT': 'Italy', 'ES': 'Spain', 'NL': 'Netherlands',
+  'BE': 'Belgium', 'CH': 'Switzerland', 'AT': 'Austria', 'SE': 'Sweden', 'NO': 'Norway',
+  'DK': 'Denmark', 'FI': 'Finland', 'IE': 'Ireland', 'PT': 'Portugal', 'GR': 'Greece',
+  'BR': 'Brazil', 'AR': 'Argentina', 'MX': 'Mexico', 'CL': 'Chile', 'CO': 'Colombia',
+  'JP': 'Japan', 'KR': 'South Korea', 'CN': 'China', 'TW': 'Taiwan', 'HK': 'Hong Kong',
+  'IL': 'Israel', 'TR': 'Turkey', 'EG': 'Egypt', 'MA': 'Morocco', 'TN': 'Tunisia'
 };
 
 const TeamManager: React.FC<TeamManagerProps> = ({ tournamentId, onTeamsUpdated }) => {
@@ -334,9 +335,9 @@ const TeamManager: React.FC<TeamManagerProps> = ({ tournamentId, onTeamsUpdated 
                 className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white font-jetbrains focus:border-blue-500 focus:outline-none transition-colors duration-300"
               >
                 <option value="">Select country</option>
-                {Object.entries(COUNTRY_FLAGS).map(([code, flag]) => (
+                {Object.entries(COUNTRY_CODES).map(([code, name]) => (
                   <option key={code} value={code}>
-                    {flag} {code}
+                    {name}
                   </option>
                 ))}
               </select>
@@ -374,11 +375,21 @@ const TeamManager: React.FC<TeamManagerProps> = ({ tournamentId, onTeamsUpdated 
                 <div>
                   <div className="text-white font-medium font-jetbrains flex items-center gap-2">
                     {formData.name}
-                    {formData.country && COUNTRY_FLAGS[formData.country] && (
-                      <span className="text-lg">{COUNTRY_FLAGS[formData.country]}</span>
+                    {formData.country && (
+                      <ReactCountryFlag 
+                        countryCode={formData.country} 
+                        svg 
+                        style={{
+                          width: '1.5em',
+                          height: '1.5em',
+                        }}
+                        title={`Flag: ${formData.country}`}
+                      />
                     )}
                   </div>
-                  <div className="text-gray-400 text-sm font-jetbrains">Preview</div>
+                  <div className="text-gray-400 text-sm font-jetbrains">
+                    {formData.country ? `${COUNTRY_CODES[formData.country]}` : 'No country set'}
+                  </div>
                 </div>
               </div>
             </div>
@@ -420,12 +431,20 @@ const TeamManager: React.FC<TeamManagerProps> = ({ tournamentId, onTeamsUpdated 
                 <div className="flex-1">
                   <div className="text-white font-medium font-jetbrains flex items-center gap-2">
                     {team.name}
-                    {team.country && COUNTRY_FLAGS[team.country] && (
-                      <span className="text-lg">{COUNTRY_FLAGS[team.country]}</span>
+                    {team.country && (
+                      <ReactCountryFlag 
+                        countryCode={team.country} 
+                        svg 
+                        style={{
+                          width: '1.5em',
+                          height: '1.5em',
+                        }}
+                        title={`Flag: ${team.country}`}
+                      />
                     )}
                   </div>
                   <div className="text-gray-400 text-sm font-jetbrains">
-                    {team.country ? `${team.country}` : 'No country set'}
+                    {team.country ? `${COUNTRY_CODES[team.country]}` : 'No country set'}
                   </div>
                 </div>
               </div>

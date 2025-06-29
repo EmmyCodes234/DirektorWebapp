@@ -1,5 +1,6 @@
 import React from 'react';
 import { Team } from '../types/database';
+import ReactCountryFlag from 'react-country-flag';
 
 interface TeamLogoProps {
   team?: Team | null;
@@ -8,19 +9,6 @@ interface TeamLogoProps {
   showFlag?: boolean;
   className?: string;
 }
-
-const COUNTRY_FLAGS: Record<string, string> = {
-  'US': '🇺🇸', 'CA': '🇨🇦', 'GB': '🇬🇧', 'AU': '🇦🇺', 'NZ': '🇳🇿',
-  'NG': '🇳🇬', 'GH': '🇬🇭', 'KE': '🇰🇪', 'ZA': '🇿🇦', 'UG': '🇺🇬',
-  'IN': '🇮🇳', 'PK': '🇵🇰', 'BD': '🇧🇩', 'LK': '🇱🇰', 'MY': '🇲🇾',
-  'SG': '🇸🇬', 'TH': '🇹🇭', 'PH': '🇵🇭', 'ID': '🇮🇩', 'VN': '🇻🇳',
-  'FR': '🇫🇷', 'DE': '🇩🇪', 'IT': '🇮🇹', 'ES': '🇪🇸', 'NL': '🇳🇱',
-  'BE': '🇧🇪', 'CH': '🇨🇭', 'AT': '🇦🇹', 'SE': '🇸🇪', 'NO': '🇳🇴',
-  'DK': '🇩🇰', 'FI': '🇫🇮', 'IE': '🇮🇪', 'PT': '🇵🇹', 'GR': '🇬🇷',
-  'BR': '🇧🇷', 'AR': '🇦🇷', 'MX': '🇲🇽', 'CL': '🇨🇱', 'CO': '🇨🇴',
-  'JP': '🇯🇵', 'KR': '🇰🇷', 'CN': '🇨🇳', 'TW': '🇹🇼', 'HK': '🇭🇰',
-  'IL': '🇮🇱', 'TR': '🇹🇷', 'EG': '🇪🇬', 'MA': '🇲🇦', 'TN': '🇹🇳'
-};
 
 // Map of country codes to full country names
 const COUNTRY_NAMES: Record<string, string> = {
@@ -84,12 +72,20 @@ const TeamLogo: React.FC<TeamLogoProps> = ({
     </div>
   );
 
-  if (showFlag && team?.country && COUNTRY_FLAGS[team.country]) {
+  if (showFlag && team?.country) {
     return (
       <div className="flex items-center gap-2">
         {logoElement}
         <div className="flex items-center gap-1">
-          <span className="text-sm">{COUNTRY_FLAGS[team.country]}</span>
+          <ReactCountryFlag 
+            countryCode={team.country} 
+            svg 
+            style={{
+              width: '1.5em',
+              height: '1.5em',
+            }}
+            title={`Flag: ${team.country}`}
+          />
           <span className="text-sm text-gray-300">{COUNTRY_NAMES[team.country]}</span>
         </div>
       </div>

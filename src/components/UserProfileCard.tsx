@@ -1,5 +1,6 @@
 import React from 'react';
-import { User, Edit3, Mail, MapPin } from 'lucide-react';
+import { User, Edit3, Mail } from 'lucide-react';
+import ReactCountryFlag from 'react-country-flag';
 
 interface UserProfileCardProps {
   profile: {
@@ -14,18 +15,6 @@ interface UserProfileCardProps {
   userEmail: string;
   onEditProfile: () => void;
 }
-
-const COUNTRY_FLAGS: Record<string, string> = {
-  'US': '🇺🇸', 'CA': '🇨🇦', 'GB': '🇬🇧', 'AU': '🇦🇺', 'NZ': '🇳🇿',
-  'NG': '🇳🇬', 'GH': '🇬🇭', 'KE': '🇰🇪', 'ZA': '🇿🇦', 'UG': '🇺🇬',
-  'IN': '🇮🇳', 'PK': '🇵🇰', 'BD': '🇧🇩', 'LK': '🇱🇰', 'MY': '🇲🇾',
-  'SG': '🇸🇬', 'TH': '🇹🇭', 'PH': '🇵🇭', 'ID': '🇮🇩', 'VN': '🇻🇳',
-  'FR': '🇫🇷', 'DE': '🇩🇪', 'IT': '🇮🇹', 'ES': '🇪🇸', 'NL': '🇳🇱',
-  'BE': '🇧🇪', 'CH': '🇨🇭', 'AT': '🇦🇹', 'SE': '🇸🇪', 'NO': '🇳🇴',
-  'DK': '🇩🇰', 'FI': '🇫🇮', 'IE': '🇮🇪', 'PT': '🇵🇹', 'GR': '🇬🇷',
-  'BR': '🇧🇷', 'AR': '🇦🇷', 'MX': '🇲🇽', 'CL': '🇨🇱', 'CO': '🇨🇴',
-  'JP': '🇯🇵', 'KR': '🇰🇷', 'CN': '🇨🇳', 'TW': '🇹🇼', 'HK': '🇭🇰'
-};
 
 // Map of country codes to full country names
 const COUNTRY_NAMES: Record<string, string> = {
@@ -81,11 +70,17 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({ profile, userEmail, o
             <span>{userEmail}</span>
           </div>
           
-          {profile?.country && COUNTRY_FLAGS[profile.country] && (
+          {profile?.country && (
             <div className="flex items-center justify-center gap-2 text-gray-300 mt-3">
-              <span className="text-2xl" title={`Flag: ${profile.country}`}>
-                {COUNTRY_FLAGS[profile.country]}
-              </span>
+              <ReactCountryFlag 
+                countryCode={profile.country} 
+                svg 
+                style={{
+                  width: '1.5em',
+                  height: '1.5em',
+                }}
+                title={`Flag: ${profile.country}`}
+              />
               <span className="font-jetbrains text-sm">
                 {COUNTRY_NAMES[profile.country]}
               </span>

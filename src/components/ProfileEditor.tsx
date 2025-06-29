@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, Upload, Save, X, Check, AlertTriangle, Globe, Flag, ChevronDown } from 'lucide-react';
+import { User, Upload, Save, X, Check, AlertTriangle, Globe, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuditLog } from '../hooks/useAuditLog';
+import ReactCountryFlag from 'react-country-flag';
 
 interface ProfileEditorProps {
   isOpen: boolean;
@@ -24,15 +25,15 @@ interface UserProfile {
 }
 
 const COUNTRY_CODES: Record<string, string> = {
-  'US': '🇺🇸 United States', 'CA': '🇨🇦 Canada', 'GB': '🇬🇧 United Kingdom', 'AU': '🇦🇺 Australia', 'NZ': '🇳🇿 New Zealand',
-  'NG': '🇳🇬 Nigeria', 'GH': '🇬🇭 Ghana', 'KE': '🇰🇪 Kenya', 'ZA': '🇿🇦 South Africa', 'UG': '🇺🇬 Uganda',
-  'IN': '🇮🇳 India', 'PK': '🇵🇰 Pakistan', 'BD': '🇧🇩 Bangladesh', 'LK': '🇱🇰 Sri Lanka', 'MY': '🇲🇾 Malaysia',
-  'SG': '🇸🇬 Singapore', 'TH': '🇹🇭 Thailand', 'PH': '🇵🇭 Philippines', 'ID': '🇮🇩 Indonesia', 'VN': '🇻🇳 Vietnam',
-  'FR': '🇫🇷 France', 'DE': '🇩🇪 Germany', 'IT': '🇮🇹 Italy', 'ES': '🇪🇸 Spain', 'NL': '🇳🇱 Netherlands',
-  'BE': '🇧🇪 Belgium', 'CH': '🇨🇭 Switzerland', 'AT': '🇦🇹 Austria', 'SE': '🇸🇪 Sweden', 'NO': '🇳🇴 Norway',
-  'DK': '🇩🇰 Denmark', 'FI': '🇫🇮 Finland', 'IE': '🇮🇪 Ireland', 'PT': '🇵🇹 Portugal', 'GR': '🇬🇷 Greece',
-  'BR': '🇧🇷 Brazil', 'AR': '🇦🇷 Argentina', 'MX': '🇲🇽 Mexico', 'CL': '🇨🇱 Chile', 'CO': '🇨🇴 Colombia',
-  'JP': '🇯🇵 Japan', 'KR': '🇰🇷 South Korea', 'CN': '🇨🇳 China', 'TW': '🇹🇼 Taiwan', 'HK': '🇭🇰 Hong Kong'
+  'US': 'United States', 'CA': 'Canada', 'GB': 'United Kingdom', 'AU': 'Australia', 'NZ': 'New Zealand',
+  'NG': 'Nigeria', 'GH': 'Ghana', 'KE': 'Kenya', 'ZA': 'South Africa', 'UG': 'Uganda',
+  'IN': 'India', 'PK': 'Pakistan', 'BD': 'Bangladesh', 'LK': 'Sri Lanka', 'MY': 'Malaysia',
+  'SG': 'Singapore', 'TH': 'Thailand', 'PH': 'Philippines', 'ID': 'Indonesia', 'VN': 'Vietnam',
+  'FR': 'France', 'DE': 'Germany', 'IT': 'Italy', 'ES': 'Spain', 'NL': 'Netherlands',
+  'BE': 'Belgium', 'CH': 'Switzerland', 'AT': 'Austria', 'SE': 'Sweden', 'NO': 'Norway',
+  'DK': 'Denmark', 'FI': 'Finland', 'IE': 'Ireland', 'PT': 'Portugal', 'GR': 'Greece',
+  'BR': 'Brazil', 'AR': 'Argentina', 'MX': 'Mexico', 'CL': 'Chile', 'CO': 'Colombia',
+  'JP': 'Japan', 'KR': 'South Korea', 'CN': 'China', 'TW': 'Taiwan', 'HK': 'Hong Kong'
 };
 
 const ProfileEditor: React.FC<ProfileEditorProps> = ({
