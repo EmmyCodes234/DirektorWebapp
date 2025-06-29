@@ -2,15 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Trophy, 
-  Plus, 
-  User, 
   HelpCircle, 
   ChevronLeft, 
   ChevronRight,
   LogOut,
   Users,
   BarChart3,
-  Settings,
   Home
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -93,40 +90,6 @@ const Sidebar: React.FC<SidebarProps> = ({ onSignOut }) => {
     }, 300);
   };
 
-  const handleCreateNew = () => {
-    setIsLoading(prev => ({ ...prev, '/new-tournament': true }));
-    
-    // Close mobile sidebar if open
-    if (isMobile && isOpen) {
-      setIsOpen(false);
-    }
-    
-    // Navigate to new tournament page
-    navigate('/new-tournament');
-    
-    // Reset loading state after navigation
-    setTimeout(() => {
-      setIsLoading(prev => ({ ...prev, '/new-tournament': false }));
-    }, 300);
-  };
-
-  const handleProfileSettings = () => {
-    setIsLoading(prev => ({ ...prev, '/profile': true }));
-    
-    // Close mobile sidebar if open
-    if (isMobile && isOpen) {
-      setIsOpen(false);
-    }
-    
-    // Navigate to profile page
-    navigate('/profile');
-    
-    // Reset loading state after navigation
-    setTimeout(() => {
-      setIsLoading(prev => ({ ...prev, '/profile': false }));
-    }, 300);
-  };
-
   const handleHelp = () => {
     setIsLoading(prev => ({ ...prev, '/help': true }));
     
@@ -150,9 +113,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onSignOut }) => {
 
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: Home },
-    { path: '/new-tournament', label: 'Create New', icon: Plus, onClick: handleCreateNew },
     { path: '/leaderboard/players', label: 'Player Rankings', icon: Users },
-    { path: '/profile', label: 'Profile Settings', icon: Settings, onClick: handleProfileSettings },
     { path: '/help', label: 'Help', icon: HelpCircle, onClick: handleHelp },
   ];
 
@@ -224,7 +185,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onSignOut }) => {
               <button
                 onClick={handleSignOut}
                 disabled={isLoading.signOut}
-                className="w-full flex items-center gap-3 px-4 py-3 bg-red-600/20 text-red-400 hover:bg-red-600/30 hover:text-white rounded-lg border border-red-500/50 transition-all duration-300 active:scale-98"
+                className="w-full flex items-center gap-3 px-4 py-3 bg-red-600/20 border border-red-500/50 text-red-400 hover:bg-red-600/30 hover:text-white rounded-lg font-jetbrains text-sm transition-all duration-200"
                 style={{ minHeight: '44px' }}
               >
                 {isLoading.signOut ? (
