@@ -103,7 +103,6 @@ const Sidebar: React.FC<SidebarProps> = ({ onSignOut }) => {
     { path: '/new-tournament', label: 'Create New', icon: Plus },
     { path: '/leaderboard/players', label: 'Player Rankings', icon: Users },
     { path: '/leaderboard/directors', label: 'Director Rankings', icon: BarChart3 },
-    { path: '/settings', label: 'Settings', icon: Settings },
     { path: '/profile', label: 'Profile', icon: User },
     { path: '/help', label: 'Help', icon: HelpCircle },
   ];

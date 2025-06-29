@@ -165,13 +165,13 @@ const TournamentControlCenter: React.FC = () => {
       }
       
       // Check if there are registered players
-      const { data: players, error: playersError } = await supabase
+      const { data: existingPlayers, error: playersError } = await supabase
         .from('players')
         .select('id')
         .eq('tournament_id', tournamentId)
         .limit(1);
         
-      if (!playersError && players && players.length > 0) {
+      if (!playersError && existingPlayers && existingPlayers.length > 0) {
         setHasRegisteredPlayers(true);
       } else {
         // If no players and this is a team tournament, start with registration tab
