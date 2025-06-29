@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, User, UserCheck, AlertTriangle, Upload, RefreshCw, Check } from 'lucide-react';
+import { X, Save, User, UserCheck, AlertTriangle, Upload, RefreshCw, Check, Eye } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Team } from '../types/database';
 import { parsePlayerInput } from '../utils/playerParser';
