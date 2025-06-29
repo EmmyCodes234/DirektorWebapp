@@ -1,27 +1,21 @@
 import React from 'react';
-import { Plus, Eye, History, Trophy } from 'lucide-react';
+import { Plus, Eye, History, Trophy, ArrowRight } from 'lucide-react';
 
 interface TournamentManagerCardProps {
   onNewTournament: () => void;
   onViewTournaments: () => void;
   onTournamentHistory: () => void;
+  hasExistingTournaments?: boolean;
 }
 
 const TournamentManagerCard: React.FC<TournamentManagerCardProps> = ({
   onNewTournament,
   onViewTournaments,
-  onTournamentHistory
+  onTournamentHistory,
+  hasExistingTournaments = false
 }) => {
-  const handleCardKeyDown = (event: React.KeyboardEvent, action: () => void) => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      action();
-    }
-  };
-
   return (
-    <div 
-      className="bg-gray-900/50 border border-cyan-500/30 rounded-2xl p-8 backdrop-blur-lg hover:bg-gray-800/50 hover:border-cyan-400/50 transition-all duration-300 group focus:outline-none focus:ring-4 focus:ring-cyan-500/50 focus:border-cyan-400"
+    <div className="bg-gray-900/50 border border-cyan-500/30 rounded-2xl p-8 backdrop-blur-lg hover:bg-gray-800/50 hover:border-cyan-400/50 transition-all duration-300 group focus:outline-none focus:ring-4 focus:ring-cyan-500/50 focus:border-cyan-400"
       tabIndex={0}
       role="region"
       aria-label="Tournament Management - Access tournament creation, management, and history"
@@ -39,40 +33,43 @@ const TournamentManagerCard: React.FC<TournamentManagerCardProps> = ({
         </h3>
         
         <p className="text-gray-400 font-jetbrains mb-6 leading-relaxed">
-          Access and manage your tournaments
+          Create, manage and view your tournaments
         </p>
       </div>
 
-      {/* Navigation Links */}
+      {/* Action Buttons */}
       <div className="space-y-3">
         <button
           onClick={onNewTournament}
-          onKeyDown={(e) => handleCardKeyDown(e, onNewTournament)}
-          className="w-full flex items-center gap-3 px-4 py-3 bg-cyan-600/20 border border-cyan-500/50 rounded-lg text-cyan-300 hover:bg-cyan-600/30 hover:text-white hover:border-cyan-400 transition-all duration-200 font-jetbrains font-medium focus:outline-none focus:ring-2 focus:ring-cyan-500"
-          aria-label="Create a new tournament"
+          className="w-full flex items-center justify-between px-4 py-3 bg-cyan-600/20 border border-cyan-500/50 rounded-lg text-cyan-300 hover:bg-cyan-600/30 hover:text-white hover:border-cyan-400 transition-all duration-200 font-jetbrains font-medium"
         >
-          <Plus className="w-5 h-5" />
-          <span>New Tournament</span>
+          <div className="flex items-center gap-2">
+            <Plus className="w-5 h-5" />
+            <span>Create New Tournament</span>
+          </div>
+          <ArrowRight className="w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
         </button>
 
         <button
           onClick={onViewTournaments}
-          onKeyDown={(e) => handleCardKeyDown(e, onViewTournaments)}
-          className="w-full flex items-center gap-3 px-4 py-3 bg-blue-600/20 border border-blue-500/50 rounded-lg text-blue-300 hover:bg-blue-600/30 hover:text-white hover:border-blue-400 transition-all duration-200 font-jetbrains font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
-          aria-label="View and manage active tournaments"
+          className="w-full flex items-center justify-between px-4 py-3 bg-blue-600/20 border border-blue-500/50 rounded-lg text-blue-300 hover:bg-blue-600/30 hover:text-white hover:border-blue-400 transition-all duration-200 font-jetbrains font-medium"
         >
-          <Eye className="w-5 h-5" />
-          <span>View Tournaments</span>
+          <div className="flex items-center gap-2">
+            <Eye className="w-5 h-5" />
+            <span>{hasExistingTournaments ? 'View Active Tournaments' : 'View Tournaments'}</span>
+          </div>
+          <ArrowRight className="w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
         </button>
 
         <button
           onClick={onTournamentHistory}
-          onKeyDown={(e) => handleCardKeyDown(e, onTournamentHistory)}
-          className="w-full flex items-center gap-3 px-4 py-3 bg-purple-600/20 border border-purple-500/50 rounded-lg text-purple-300 hover:bg-purple-600/30 hover:text-white hover:border-purple-400 transition-all duration-200 font-jetbrains font-medium focus:outline-none focus:ring-2 focus:ring-purple-500"
-          aria-label="View completed tournament history and archives"
+          className="w-full flex items-center justify-between px-4 py-3 bg-purple-600/20 border border-purple-500/50 rounded-lg text-purple-300 hover:bg-purple-600/30 hover:text-white hover:border-purple-400 transition-all duration-200 font-jetbrains font-medium"
         >
-          <History className="w-5 h-5" />
-          <span>Tournament History</span>
+          <div className="flex items-center gap-2">
+            <History className="w-5 h-5" />
+            <span>Tournament History</span>
+          </div>
+          <ArrowRight className="w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
         </button>
       </div>
     </div>
