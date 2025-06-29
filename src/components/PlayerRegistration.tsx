@@ -184,6 +184,11 @@ James Rodriguez, 1856`;
         
       if (!playersError && existingPlayers && existingPlayers.length > 0) {
         setHasRegisteredPlayers(true);
+      } else {
+        // If no players and this is a team tournament, start with registration tab
+        if (tournamentData.team_mode) {
+          setCurrentStep('registration');
+        }
       }
 
     } catch (err: any) {

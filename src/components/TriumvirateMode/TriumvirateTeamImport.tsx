@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, Check, AlertTriangle, RefreshCw, Save, X } from 'lucide-react';
+import { Upload, Check, AlertTriangle, RefreshCw, Save, X, FileText } from 'lucide-react';
 import Papa from 'papaparse';
 import { supabase } from '../../lib/supabase';
 import { useAuditLog } from '../../hooks/useAuditLog';
@@ -27,6 +27,8 @@ const TriumvirateTeamImport: React.FC<TriumvirateTeamImportProps> = ({
   const [isImporting, setIsImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [manualInput, setManualInput] = useState('');
+  const [inputMethod, setInputMethod] = useState<'csv' | 'manual'>('manual');
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const { logAction } = useAuditLog();
@@ -132,6 +134,106 @@ const TriumvirateTeamImport: React.FC<TriumvirateTeamImportProps> = ({
     });
   };
 
+  const handleManualInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setManualInput(e.target.value);
+  };
+
+  const parseManualInput = () => {
+    setIsUploading(true);
+    setError(null);
+    
+    try {
+      const lines = manualInput.split('\n').filter(line => line.trim() !== '');
+      const parsedPlayers: ParsedTeamPlayer[] = [];
+      const seenNames = new Set<string>();
+      
+      lines.forEach((line, index) => {
+        // Try to parse the line in format: "Name, Rating, Team"
+        const parts = line.split(',').map(part => part.trim());
+        
+        if (parts.length < 3) {
+          parsedPlayers.push({
+            fullName: line,
+            rating: 0,
+            teamName: '',
+            isValid: false,
+            error: 'Invalid format. Use: Name, Rating, Team'
+          });
+          return;
+        }
+        
+        const fullName = parts[0];
+        const ratingStr = parts[1];
+        const teamName = parts.slice(2).join(',').trim(); // In case team name has commas
+        
+        // Validate name
+        if (!fullName) {
+          parsedPlayers.push({
+            fullName: '',
+            rating: 0,
+            teamName,
+            isValid: false,
+            error: 'Missing player name'
+          });
+          return;
+        }
+        
+        // Check for duplicate names
+        const nameLower = fullName.toLowerCase();
+        if (seenNames.has(nameLower)) {
+          parsedPlayers.push({
+            fullName,
+            rating: 0,
+            teamName,
+            isValid: false,
+            error: 'Duplicate player name'
+          });
+          return;
+        }
+        
+        // Validate rating
+        const rating = parseInt(ratingStr, 10);
+        if (isNaN(rating) || rating < 0 || rating > 3000) {
+          parsedPlayers.push({
+            fullName,
+            rating: 0,
+            teamName,
+            isValid: false,
+            error: 'Invalid rating (0-3000)'
+          });
+          return;
+        }
+        
+        // Validate team name
+        if (!teamName) {
+          parsedPlayers.push({
+            fullName,
+            rating,
+            teamName: '',
+            isValid: false,
+            error: 'Missing team name'
+          });
+          return;
+        }
+        
+        seenNames.add(nameLower);
+        parsedPlayers.push({
+          fullName,
+          rating,
+          teamName,
+          isValid: true
+        });
+      });
+      
+      setParsedData(parsedPlayers);
+    } catch (err: any) {
+      console.error('Error parsing manual input:', err);
+      setError('Failed to parse input: ' + err.message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const handleImport = async () => {
     try {
       setIsImporting(true);
@@ -202,7 +304,8 @@ const TriumvirateTeamImport: React.FC<TriumvirateTeamImportProps> = ({
         details: {
           tournament_id: tournamentId,
           team_count: teamPlayers.size,
-          player_count: validPlayers.length
+          player_count: validPlayers.length,
+          import_method: inputMethod
         }
       });
       
@@ -212,6 +315,7 @@ const TriumvirateTeamImport: React.FC<TriumvirateTeamImportProps> = ({
       // Reset form
       setCsvFile(null);
       setParsedData([]);
+      setManualInput('');
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -229,7 +333,8 @@ const TriumvirateTeamImport: React.FC<TriumvirateTeamImportProps> = ({
         action: 'triumvirate_teams_import_error',
         details: {
           tournament_id: tournamentId,
-          error: err.message
+          error: err.message,
+          import_method: inputMethod
         }
       });
     } finally {
@@ -240,8 +345,18 @@ const TriumvirateTeamImport: React.FC<TriumvirateTeamImportProps> = ({
   const handleCancel = () => {
     setCsvFile(null);
     setParsedData([]);
+    setManualInput('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  const handlePreviewData = () => {
+    if (inputMethod === 'csv' && csvFile) {
+      // CSV is already parsed on file selection
+      return;
+    } else if (inputMethod === 'manual' && manualInput.trim()) {
+      parseManualInput();
     }
   };
 
@@ -271,34 +386,92 @@ const TriumvirateTeamImport: React.FC<TriumvirateTeamImportProps> = ({
         </div>
       )}
       
-      {/* CSV Upload */}
+      {/* Input Method Selector */}
       <div className="mb-6">
-        <label className="block text-gray-300 text-sm font-medium mb-2 font-jetbrains">
-          Upload CSV File
-        </label>
-        
-        <div className="flex items-center gap-4">
-          <input
-            type="file"
-            ref={fileInputRef}
-            accept=".csv"
-            onChange={handleFileChange}
-            className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-600/20 file:text-blue-400 hover:file:bg-blue-600/30 file:cursor-pointer file:transition-colors file:duration-200"
-          />
-          
-          {csvFile && (
-            <button
-              onClick={handleCancel}
-              className="p-2 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white rounded-lg transition-all duration-200"
-            >
-              <X size={16} />
-            </button>
-          )}
+        <div className="flex space-x-4 mb-4">
+          <button
+            onClick={() => setInputMethod('manual')}
+            className={`px-4 py-2 rounded-lg transition-all duration-200 ${
+              inputMethod === 'manual'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+            }`}
+          >
+            Manual Entry
+          </button>
+          <button
+            onClick={() => setInputMethod('csv')}
+            className={`px-4 py-2 rounded-lg transition-all duration-200 ${
+              inputMethod === 'csv'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+            }`}
+          >
+            CSV Upload
+          </button>
         </div>
         
-        <p className="mt-2 text-xs text-gray-400 font-jetbrains">
-          CSV should have columns: "Full Name", "Rating", "Team Name"
-        </p>
+        {/* Manual Input */}
+        {inputMethod === 'manual' && (
+          <div>
+            <label className="block text-gray-300 text-sm font-medium mb-2 font-jetbrains">
+              Enter Players (Name, Rating, Team)
+            </label>
+            <textarea
+              value={manualInput}
+              onChange={handleManualInputChange}
+              className="w-full h-64 px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white font-jetbrains focus:border-blue-500 focus:outline-none transition-colors duration-300 resize-none"
+              placeholder="John Smith, 1750, Team Alpha
+Jane Doe, 1820, Team Alpha
+Bob Johnson, 1680, Team Beta
+Alice Williams, 1920, Team Beta"
+            />
+            <p className="mt-2 text-xs text-gray-400 font-jetbrains">
+              Format: Name, Rating, Team (one player per line)
+            </p>
+            <div className="mt-4">
+              <button
+                onClick={handlePreviewData}
+                disabled={!manualInput.trim()}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-jetbrains transition-all duration-200"
+              >
+                Preview Data
+              </button>
+            </div>
+          </div>
+        )}
+        
+        {/* CSV Upload */}
+        {inputMethod === 'csv' && (
+          <div>
+            <label className="block text-gray-300 text-sm font-medium mb-2 font-jetbrains">
+              Upload CSV File
+            </label>
+            
+            <div className="flex items-center gap-4">
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept=".csv"
+                onChange={handleFileChange}
+                className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-600/20 file:text-blue-400 hover:file:bg-blue-600/30 file:cursor-pointer file:transition-colors file:duration-200"
+              />
+              
+              {csvFile && (
+                <button
+                  onClick={handleCancel}
+                  className="p-2 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white rounded-lg transition-all duration-200"
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+            
+            <p className="mt-2 text-xs text-gray-400 font-jetbrains">
+              CSV should have columns: "Full Name", "Rating", "Team Name"
+            </p>
+          </div>
+        )}
       </div>
       
       {/* Preview Table */}
@@ -432,26 +605,46 @@ const TriumvirateTeamImport: React.FC<TriumvirateTeamImportProps> = ({
         </div>
       )}
       
-      {/* CSV Template */}
+      {/* Format Help */}
       <div className="mt-8 bg-gray-800/50 border border-gray-700 rounded-lg p-4">
-        <h3 className="text-lg font-bold text-white font-orbitron mb-3">
-          CSV Template
+        <h3 className="text-lg font-bold text-white font-orbitron mb-3 flex items-center gap-2">
+          <FileText className="w-5 h-5 text-blue-400" />
+          Format Guidelines
         </h3>
         
-        <p className="text-gray-300 font-jetbrains text-sm mb-3">
-          Your CSV file should have the following columns:
-        </p>
-        
-        <div className="bg-gray-900/50 p-3 rounded-lg font-mono text-sm text-gray-300 overflow-x-auto">
-          Full Name,Rating,Team Name<br />
-          John Smith,1750,Team Alpha<br />
-          Jane Doe,1820,Team Alpha<br />
-          Bob Johnson,1680,Team Beta<br />
-          Alice Williams,1920,Team Beta
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Manual Entry Format */}
+          <div>
+            <h4 className="text-blue-300 font-medium font-jetbrains mb-2">Manual Entry Format</h4>
+            <p className="text-gray-300 font-jetbrains text-sm mb-3">
+              Enter one player per line in this format:
+            </p>
+            <div className="bg-gray-900/50 p-3 rounded-lg font-mono text-sm text-gray-300 overflow-x-auto">
+              John Smith, 1750, Team Alpha<br />
+              Jane Doe, 1820, Team Alpha<br />
+              Bob Johnson, 1680, Team Beta<br />
+              Alice Williams, 1920, Team Beta
+            </div>
+          </div>
+          
+          {/* CSV Format */}
+          <div>
+            <h4 className="text-blue-300 font-medium font-jetbrains mb-2">CSV File Format</h4>
+            <p className="text-gray-300 font-jetbrains text-sm mb-3">
+              Your CSV file should have these columns:
+            </p>
+            <div className="bg-gray-900/50 p-3 rounded-lg font-mono text-sm text-gray-300 overflow-x-auto">
+              Full Name,Rating,Team Name<br />
+              John Smith,1750,Team Alpha<br />
+              Jane Doe,1820,Team Alpha<br />
+              Bob Johnson,1680,Team Beta<br />
+              Alice Williams,1920,Team Beta
+            </div>
+          </div>
         </div>
         
-        <p className="text-gray-400 font-jetbrains text-xs mt-2">
-          Note: Each team should have the same number of players for balanced matchups
+        <p className="text-gray-400 font-jetbrains text-xs mt-4">
+          Note: Each team should have the same number of players for balanced matchups. Triumvirate mode requires exactly 36 teams.
         </p>
       </div>
     </div>
