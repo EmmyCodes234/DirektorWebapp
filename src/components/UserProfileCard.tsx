@@ -27,6 +27,19 @@ const COUNTRY_FLAGS: Record<string, string> = {
   'JP': '🇯🇵', 'KR': '🇰🇷', 'CN': '🇨🇳', 'TW': '🇹🇼', 'HK': '🇭🇰'
 };
 
+// Map of country codes to full country names
+const COUNTRY_NAMES: Record<string, string> = {
+  'US': 'United States', 'CA': 'Canada', 'GB': 'United Kingdom', 'AU': 'Australia', 'NZ': 'New Zealand',
+  'NG': 'Nigeria', 'GH': 'Ghana', 'KE': 'Kenya', 'ZA': 'South Africa', 'UG': 'Uganda',
+  'IN': 'India', 'PK': 'Pakistan', 'BD': 'Bangladesh', 'LK': 'Sri Lanka', 'MY': 'Malaysia',
+  'SG': 'Singapore', 'TH': 'Thailand', 'PH': 'Philippines', 'ID': 'Indonesia', 'VN': 'Vietnam',
+  'FR': 'France', 'DE': 'Germany', 'IT': 'Italy', 'ES': 'Spain', 'NL': 'Netherlands',
+  'BE': 'Belgium', 'CH': 'Switzerland', 'AT': 'Austria', 'SE': 'Sweden', 'NO': 'Norway',
+  'DK': 'Denmark', 'FI': 'Finland', 'IE': 'Ireland', 'PT': 'Portugal', 'GR': 'Greece',
+  'BR': 'Brazil', 'AR': 'Argentina', 'MX': 'Mexico', 'CL': 'Chile', 'CO': 'Colombia',
+  'JP': 'Japan', 'KR': 'South Korea', 'CN': 'China', 'TW': 'Taiwan', 'HK': 'Hong Kong'
+};
+
 const UserProfileCard: React.FC<UserProfileCardProps> = ({ profile, userEmail, onEditProfile }) => {
   return (
     <div className="bg-gray-900/50 border border-purple-500/30 rounded-2xl p-8 backdrop-blur-lg hover:bg-gray-800/50 hover:border-purple-400/50 transition-all duration-300 group relative">
@@ -74,7 +87,7 @@ const UserProfileCard: React.FC<UserProfileCardProps> = ({ profile, userEmail, o
                 {COUNTRY_FLAGS[profile.country]}
               </span>
               <span className="font-jetbrains text-sm">
-                {profile.country}
+                {COUNTRY_NAMES[profile.country]}
               </span>
             </div>
           )}
